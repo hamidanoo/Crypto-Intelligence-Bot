@@ -1,21 +1,47 @@
-# Phase 9 audit notes (not live-verified here: Docker is
-# unavailable in the audit environment, so this file is
-# inspected, not run — see docs/PHASE_09_AUDIT_REPORT.md):
-# - Only Nginx publishes a port publicly. Postgres, Redis,
-#   backend, and frontend ports are bound to 127.0.0.1 so
-#   they are reachable locally but not from the network.
-# - Backend and bot both read .env (optional file) so
-#   Binance URLs, the encryption key, and tuning actually
-#   reach the containers; previously only five variables
-#   were passed and the rest silently fell back to defaults.
-# - The bot does NOT run migrations: its entrypoint is
-#   cleared so it cannot race the backend's
-#   `alembic upgrade head` on the same database.
-# - Every service has restart: unless-stopped and, where
-#   possible, a healthcheck. TLS is still outstanding:
-#   Nginx serves HTTP only; production needs HTTPS
-#   (Phase 10 deployment work, documented in
-#   docs/VPS_DEPLOYMENT.md).
+# Crypto Intelligence — single-VPS Docker deployment (Phase 10, Stage A).
+#
+# Networking rule: ONLY Nginx publishes public ports (80/443).
+# PostgreSQL, Redis, backend, and frontend are bound to
+# 127.0.0.1, so they are reachable from the host for checks
+# but never from the network. All services share one named
+# bridge network (app_net) for internal DNS only; there is
+# no published port that reaches an internal service.
+#
+# Scheduler rule: exactly ONE backend service runs the
+# scheduler (see app/scheduler.py). Never scale backend or
+# bot to more than one replica: a second scheduler would
+# double-collect and double-notify. See
+# docs/PRODUCTION_DEPLOYMENT_GUIDE.md.
+#
+# Migrations: ONLY the backend service runs them, via
+# backend/entrypoint.sh (`alembic upgrade head` with
+# `set -e`). The bot's entrypoint is cleared so it cannot
+# race the backend on the same database. If migrations
+# fail, the backend container exits and the API is never
+# exposed with a stale schema.
+#
+# Nginx config: NGINX_CONFIG_FILE selects the mounted
+# config. Local development uses ./nginx/nginx.conf
+# (HTTP only). Production uses ./nginx/production.conf
+# (HTTP -> HTTPS redirect + TLS) and requires real
+# certificates in the certbot_certs volume; see
+# scripts/setup-https.sh. Do NOT serve production traffic
+# through the HTTP-only config.
+#
+# Resource limits below are starting values, not measured
+# minima: adjust them from real VPS observations.
+#
+# NOTE: Docker was not available in the Stage A
+# environment, so this file is validated by parsing and
+# review, not by a live `docker compose up` run. That run
+# is a Stage B task (docs/PRODUCTION_CHECKLIST.md).
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   postgres:
     image: postgres:16
@@ -28,6 +54,14 @@ services:
       - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - app_net
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+    logging: *default-logging
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-crypto}"]
       interval: 5s
@@ -37,10 +71,22 @@ services:
   redis:
     image: redis:7
     restart: unless-stopped
+    # No --appendonly change here: the application treats
+    # Redis as a cache with an in-memory fallback, so a
+    # restart that drops cached entries is safe. If Redis
+    # later becomes a queue, revisit persistence here.
     ports:
       - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
+    networks:
+      - app_net
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 256M
+    logging: *default-logging
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -59,6 +105,7 @@ services:
       ENVIRONMENT: ${ENVIRONMENT:-development}
       SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
       CORS_ORIGINS: http://localhost:3000,http://localhost
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
     ports:
       - "127.0.0.1:8000:8000"
     depends_on:
@@ -66,6 +113,14 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    networks:
+      - app_net
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+    logging: *default-logging
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 15s
@@ -96,6 +151,9 @@ services:
         condition: service_healthy
       backend:
         condition: service_healthy
+    networks:
+      - app_net
+    logging: *default-logging
 
   frontend:
     build: ./frontend
@@ -108,6 +166,14 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+    networks:
+      - app_net
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+    logging: *default-logging
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3000/"]
       interval: 15s
@@ -119,14 +185,45 @@ services:
     restart: unless-stopped
     ports:
       - "80:80"
+      - "443:443"
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ${NGINX_CONFIG_FILE:-./nginx/nginx.conf}:/etc/nginx/nginx.conf:ro
+      - certbot_certs:/etc/letsencrypt:ro
+      - certbot_webroot:/var/www/certbot:ro
     depends_on:
       backend:
         condition: service_healthy
       frontend:
         condition: service_healthy
+    networks:
+      - app_net
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost/"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  # One-off certificate tool, started only explicitly:
+  #   docker compose --profile certbot run --rm certbot certonly \
+  #     --webroot -w /var/www/certbot -d YOUR_DOMAIN --email you@example.com --agree-tos
+  # See scripts/setup-https.sh. Never started by `docker compose up`.
+  certbot:
+    image: certbot/certbot:latest
+    profiles:
+      - certbot
+    volumes:
+      - certbot_certs:/etc/letsencrypt
+      - certbot_webroot:/var/www/certbot
+    networks:
+      - app_net
 
 volumes:
   postgres_data:
   redis_data:
+  certbot_certs:
+  certbot_webroot:
+
+networks:
+  app_net:
+    driver: bridge

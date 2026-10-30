@@ -11,6 +11,10 @@ ENV NODE_ENV=production
 COPY --from=build /app/package.json ./
 COPY --from=build /app/.next ./.next
 COPY --from=build /app/node_modules ./node_modules
+# Non-root runtime user (Phase 10): the prebuilt Next.js
+# server needs no root privileges.
+RUN chown -R node:node /app
+USER node
 # No COPY of ./public: this project has no public/
 # directory, and Docker COPY fails when the source does
 # not exist (Phase 9 audit: this broke `docker compose
