@@ -9,11 +9,21 @@ type Health = {
   timestamp: string;
 };
 
+type AnnouncementItem = {
+  id: number;
+  title: string;
+  category: string;
+  category_confidence: string;
+  published_at: string | null;
+  canonical_url: string;
+};
+
 const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
 export default function Home() {
   const [health, setHealth] = useState<Health | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [announcements, setAnnouncements] = useState<AnnouncementItem[]>([]);
 
   useEffect(() => {
     fetch(`${apiBase}/health`)
@@ -23,6 +33,12 @@ export default function Home() {
       })
       .then(setHealth)
       .catch((err: Error) => setError(err.message));
+    fetch(`${apiBase}/announcements?page_size=5`)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        if (data) setAnnouncements(data.items ?? []);
+      })
+      .catch(() => {});
   }, []);
 
   return (
@@ -45,6 +61,25 @@ export default function Home() {
           <p className="mt-2 text-sm text-red-400">Backend unavailable: {error}</p>
         ) : (
           <p className="mt-2 text-sm text-slate-400">Checking backend…</p>
+        )}
+      </section>
+      <section className="mt-6 rounded-lg border border-slate-800 bg-slate-900 p-4">
+        <h2 className="font-semibold">Latest announcements</h2>
+        {announcements.length === 0 ? (
+          <p className="mt-2 text-sm text-slate-400">No announcements collected yet.</p>
+        ) : (
+          <ul className="mt-2 space-y-2 text-sm">
+            {announcements.map((item) => (
+              <li key={item.id}>
+                <a className="text-sky-400 underline" href={item.canonical_url} target="_blank" rel="noreferrer">
+                  {item.title}
+                </a>
+                <span className="ml-2 text-slate-400">
+                  {item.category} ({item.category_confidence})
+                </span>
+              </li>
+            ))}
+          </ul>
         )}
       </section>
     </main>
