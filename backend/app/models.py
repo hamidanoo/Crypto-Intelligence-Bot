@@ -43,6 +43,116 @@ class AdminUser(Base, TimestampMixin):
     role: Mapped[str] = mapped_column(String(64), default="admin", nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     is_superuser: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Phase 8 login throttling: consecutive failed logins
+    # and the time until which the account stays locked.
+    failed_login_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class AdminRole(Base, TimestampMixin):
+    """A named role. Permissions live in AdminPermission and
+    are attached through AdminRolePermission, so a role is
+    never just a string check in handler code."""
+
+    __tablename__ = "admin_roles"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
+    description: Mapped[str | None] = mapped_column(String(255))
+
+
+class AdminPermission(Base, TimestampMixin):
+    """One granular permission, e.g. collections.run."""
+
+    __tablename__ = "admin_permissions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    key: Mapped[str] = mapped_column(String(128), unique=True, index=True, nullable=False)
+    description: Mapped[str | None] = mapped_column(String(255))
+
+
+class AdminRolePermission(Base):
+    """Role -> permission link."""
+
+    __tablename__ = "admin_role_permissions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    role_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("admin_roles.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    permission_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("admin_permissions.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+
+    __table_args__ = (UniqueConstraint("role_id", "permission_id"),)
+
+
+class AdminUserRole(Base):
+    """Administrator -> role link. The legacy AdminUser.role
+    string is kept in sync with the primary role row, so
+    older code that reads the string still works."""
+
+    __tablename__ = "admin_user_roles"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    admin_user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("admin_users.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    role_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("admin_roles.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+
+    __table_args__ = (UniqueConstraint("admin_user_id", "role_id"),)
+
+
+class AdminSession(Base):
+    """A server-side administrator session. Only the
+    SHA-256 hash of the token is stored; the token itself
+    is held by the browser in an HttpOnly cookie and is
+    never written to logs or API responses."""
+
+    __tablename__ = "admin_sessions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    admin_user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("admin_users.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    session_token_hash: Mapped[str] = mapped_column(
+        String(128), unique=True, index=True, nullable=False
+    )
+    csrf_token: Mapped[str] = mapped_column(String(128), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    ip_address: Mapped[str | None] = mapped_column(String(64))
+    user_agent: Mapped[str | None] = mapped_column(String(255))
+
+
+class PasswordResetToken(Base):
+    """A single-use password reset token. Only the hash
+    is stored; the token itself is delivered out of band
+    and is never logged or returned by any endpoint."""
+
+    __tablename__ = "password_reset_tokens"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    admin_user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("admin_users.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    token_hash: Mapped[str] = mapped_column(String(128), unique=True, index=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class TelegramGroup(Base, TimestampMixin):
@@ -87,6 +197,12 @@ class ApiIntegration(Base, TimestampMixin):
     enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     api_key_masked: Mapped[str | None] = mapped_column(String(64))
     secret_reference: Mapped[str | None] = mapped_column(String(255))
+    # Phase 8 AES-GCM encrypted credential: the nonce and
+    # ciphertext are stored separately; the plaintext is
+    # never stored, never returned, and never logged.
+    encrypted_secret: Mapped[str | None] = mapped_column(Text)
+    encrypted_nonce: Mapped[str | None] = mapped_column(String(128))
+    encryption_key_id: Mapped[str | None] = mapped_column(String(64))
     last_success_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_error: Mapped[str | None] = mapped_column(Text)
     rate_limit_per_minute: Mapped[int | None] = mapped_column(Integer)
@@ -925,3 +1041,10 @@ class AuditLog(Base, TimestampMixin):
     entity: Mapped[str | None] = mapped_column(String(128))
     entity_id: Mapped[str | None] = mapped_column(String(128))
     details: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    # Phase 8 audit extensions. Audit rows are append-only
+    # for ordinary administrators: no update or delete
+    # endpoint exists. Secrets are never stored here; the
+    # audit writer redacts secret-like keys.
+    correlation_id: Mapped[str | None] = mapped_column(String(64), index=True)
+    ip_address: Mapped[str | None] = mapped_column(String(64))
+    outcome: Mapped[str] = mapped_column(String(32), default="success", nullable=False)

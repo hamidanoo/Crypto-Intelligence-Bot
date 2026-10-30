@@ -94,12 +94,39 @@ class Settings(BaseSettings):
     news_collection_interval_minutes: int = 5
     market_notifications_enabled: bool = True
 
+    # Phase 8 administration and security. Sessions are
+    # server-side only: the browser holds an opaque session
+    # token in an HttpOnly cookie, never a long-lived access
+    # token in localStorage. The CSRF token lives in a
+    # separate non-HttpOnly cookie and must be echoed back
+    # as X-CSRF-Token on state-changing requests.
+    session_inactivity_minutes: int = 60
+    session_absolute_hours: int = 12
+    session_cookie_name: str = "admin_session"
+    csrf_cookie_name: str = "admin_csrf"
+    login_max_attempts: int = 5
+    login_lockout_minutes: int = 15
+    login_rate_limit_per_minute: int = 30
+    password_reset_token_minutes: int = 60
+    argon2_time_cost: int = 3
+    argon2_memory_cost_kib: int = 65536
+    argon2_parallelism: int = 4
+    # Base64-encoded 32-byte AES-GCM key for credential
+    # encryption at rest. No default: production startup
+    # fails without it (see the validator below), and in
+    # non-production credential writes fail clearly.
+    credential_encryption_key: str | None = None
+    credential_encryption_key_previous: str | None = None
+    dashboard_refresh_interval_seconds: int = 60
+
     @model_validator(mode="after")
     def _validate_production_secret(self):
         if self.environment == "production" and (
             not self.secret_key or self.secret_key == "change-me-in-production"
         ):
             raise ValueError("SECRET_KEY must be set to a real value when ENVIRONMENT=production")
+        if self.environment == "production" and not self.credential_encryption_key:
+            raise ValueError("CREDENTIAL_ENCRYPTION_KEY must be set when ENVIRONMENT=production")
         return self
 
     @property
