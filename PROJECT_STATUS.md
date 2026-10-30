@@ -2,7 +2,7 @@
 
 - **Current phase:** Phase 2 — Binance Market Integration
 - **Current branch:** `phase-02-binance-integration`
-- **Latest commit:** To be filled in after the Phase 2 push is verified.
+- **Latest commit:** `5889e1364c69b686583694dc5811da2b79eab8c1` — "Integrate Binance market data endpoints", on `phase-02-binance-integration`, verified by reading the branch back after the push.
 - **Merged into main:** No. Merging requires explicit approval.
 
 ## Completed features (Phase 2)
