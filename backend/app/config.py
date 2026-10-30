@@ -72,6 +72,28 @@ class Settings(BaseSettings):
     volume_max_pages_per_interval: int = 50
     volume_notifications_enabled: bool = True
 
+    # Phase 7 market, futures, and news intelligence.
+    # Market snapshot and news/listing jobs run every 5
+    # minutes; funding every 5 minutes; open interest
+    # every 15 minutes; movement detection every 5
+    # minutes. Gainers/losers exclude symbols below the
+    # minimum 24h quote volume, so low-liquidity tokens
+    # are never presented as reliable opportunities.
+    # An alert fires once per symbol + alert type per
+    # cooldown window. Market data older than the
+    # freshness window is flagged stale in API output.
+    market_snapshot_interval_minutes: int = 5
+    market_min_quote_volume_usdt: int = 1000000
+    market_alert_cooldown_minutes: int = 60
+    market_price_alert_threshold_percent: float = 5.0
+    market_volume_spike_multiplier: float = 2.0
+    market_freshness_minutes: int = 10
+    futures_funding_interval_minutes: int = 5
+    futures_open_interest_interval_minutes: int = 15
+    futures_funding_alert_threshold: float = 0.001
+    news_collection_interval_minutes: int = 5
+    market_notifications_enabled: bool = True
+
     @model_validator(mode="after")
     def _validate_production_secret(self):
         if self.environment == "production" and (

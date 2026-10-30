@@ -278,6 +278,32 @@ class BinanceClient:
             )
         return trades
 
+    async def get_all_tickers_24hr(self) -> list[dict]:
+        """All Spot 24h tickers. Values are kept as strings
+        so callers can convert them to Decimal without
+        float loss; the existing single-symbol method
+        returns floats and is left unchanged for
+        compatibility."""
+        rows = await self._request(self.spot_base_url, "/api/v3/ticker/24hr")
+        tickers = []
+        for row in rows:
+            tickers.append(
+                {
+                    "symbol": row["symbol"],
+                    "price": str(row["lastPrice"]),
+                    "price_change_24h": str(row["priceChange"]),
+                    "price_change_percent_24h": str(row["priceChangePercent"]),
+                    "high_24h": str(row["highPrice"]),
+                    "low_24h": str(row["lowPrice"]),
+                    "volume_24h": str(row["volume"]),
+                    "quote_volume_24h": str(row["quoteVolume"]),
+                    "open_time": _utc_from_ms(int(row["openTime"])),
+                    "close_time": _utc_from_ms(int(row["closeTime"])),
+                    "source": "binance_spot",
+                }
+            )
+        return tickers
+
     # Futures ------------------------------------------------------------
 
     async def futures_ping(self):
@@ -325,5 +351,71 @@ class BinanceClient:
             "symbol": data["symbol"],
             "open_interest": float(data["openInterest"]),
             "time": _utc_from_ms(int(data["time"])),
+            "source": "binance_futures",
+        }
+
+    async def get_futures_long_short(
+        self, symbol: str, kind: str, period: str = "5m", limit: int = 1
+    ) -> dict:
+        """One long/short dataset for a symbol.
+
+        ``kind`` selects exactly one dataset, and the
+        returned ratio_type labels it, so account ratios
+        and position ratios are never mixed: global
+        account, top-trader account, top-trader
+        position, and taker buy/sell volume (where the
+        stored values are buy/sell volumes, not ratios).
+        A restricted-location (451) response surfaces
+        as a BinanceAPIError for the caller to degrade
+        on, never as fabricated data.
+        """
+        symbol = validate_symbol(symbol)
+        paths = {
+            "global_account": "/futures/data/globalLongShortAccountRatio",
+            "top_account": "/futures/data/topLongShortAccountRatio",
+            "top_position": "/futures/data/topLongShortPositionRatio",
+            "taker": "/futures/data/takerlongshortRatio",
+        }
+        if kind not in paths:
+            raise ValueError(f"Unsupported long/short dataset: {kind!r}")
+        rows = await self._request(
+            self.futures_base_url,
+            paths[kind],
+            {"symbol": symbol, "period": period, "limit": max(1, min(limit, 30))},
+        )
+        if not rows:
+            raise BinanceAPIError(f"No long/short data returned for {symbol}")
+        latest = max(rows, key=lambda row: int(row["timestamp"]))
+        if kind == "taker":
+            return {
+                "symbol": symbol,
+                "ratio_type": "taker_buy_sell_volume",
+                "long_ratio": str(latest["buyVol"]),
+                "short_ratio": str(latest["sellVol"]),
+                "long_short_ratio": str(latest["buySellRatio"]),
+                "period": period,
+                "timestamp": _utc_from_ms(int(latest["timestamp"])),
+                "source": "binance_futures",
+            }
+        return {
+            "symbol": symbol,
+            "ratio_type": {
+                "global_account": "global_account",
+                "top_account": "top_account",
+                "top_position": "top_position",
+            }[kind],
+            "long_ratio": (
+                str(latest["longAccount"])
+                if "longAccount" in latest
+                else str(latest["longPosition"])
+            ),
+            "short_ratio": (
+                str(latest["shortAccount"])
+                if "shortAccount" in latest
+                else str(latest["shortPosition"])
+            ),
+            "long_short_ratio": str(latest["longShortRatio"]),
+            "period": period,
+            "timestamp": _utc_from_ms(int(latest["timestamp"])),
             "source": "binance_futures",
         }

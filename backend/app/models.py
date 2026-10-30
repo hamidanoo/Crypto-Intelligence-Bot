@@ -745,6 +745,172 @@ class CompetitionPairConfiguration(Base, TimestampMixin):
     )
 
 
+class MarketWatchlist(Base, TimestampMixin):
+    """A symbol a user follows for market overviews.
+
+    Phase 7 adds only this watchlist table for market
+    data: prices themselves reuse MarketSnapshot.
+    """
+
+    __tablename__ = "market_watchlists"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    symbol: Mapped[str] = mapped_column(String(32), unique=True, index=True, nullable=False)
+    note: Mapped[str | None] = mapped_column(Text)
+
+
+class MarketAlert(Base, TimestampMixin):
+    """A detected market or funding movement.
+
+    An alert is a record of a threshold being crossed,
+    never a trading recommendation: price movements are
+    not described as opportunities anywhere in this
+    module. Cooldown/dedup is enforced in the service
+    layer (one alert per symbol + alert_type within the
+    configured cooldown window), with this index to
+    make that lookup cheap. Funding alerts reuse this
+    table with alert_type funding_high / funding_low.
+    """
+
+    __tablename__ = "market_alerts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    symbol: Mapped[str] = mapped_column(String(32), index=True, nullable=False)
+    alert_type: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    threshold_percent: Mapped[Decimal | None] = mapped_column(Numeric(20, 8))
+    baseline_price: Mapped[Decimal | None] = mapped_column(Numeric(28, 8))
+    current_price: Mapped[Decimal | None] = mapped_column(Numeric(28, 8))
+    change_percent: Mapped[Decimal | None] = mapped_column(Numeric(20, 8))
+    triggered_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, index=True, nullable=False
+    )
+    cooldown_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    status: Mapped[str] = mapped_column(String(32), default="triggered", nullable=False)
+    source: Mapped[str] = mapped_column(String(64), default="binance_spot", nullable=False)
+
+
+class NewsSource(Base, TimestampMixin):
+    """A news feed source.
+
+    The only enabled default source is Binance
+    announcements (source_type binance_announcements).
+    Third-party RSS feeds are added deliberately as
+    rows here and must be assessed before enabling;
+    no publisher feed is enabled by default, so no
+    publisher is claimed as integrated until it is.
+    """
+
+    __tablename__ = "news_sources"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(128), unique=True, index=True, nullable=False)
+    source_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    feed_url: Mapped[str | None] = mapped_column(String(1024))
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    reliability_note: Mapped[str | None] = mapped_column(Text)
+
+
+class CryptoNews(Base, TimestampMixin):
+    """One news item.
+
+    Built primarily from Phase 3 announcements (no
+    announcement is duplicated: announcement_id is
+    unique where present, and fingerprint is unique).
+    Summary is null when article bodies are
+    unavailable, with the API serialising that as a
+    "Summary unavailable" marker; summaries are never
+    invented and full copyrighted articles are never
+    reproduced. The same story from different sources
+    is kept as separate rows (different source_id /
+    fingerprint), never silently deleted.
+    """
+
+    __tablename__ = "crypto_news"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    source_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("news_sources.id", ondelete="SET NULL"), index=True
+    )
+    announcement_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("announcements.id", ondelete="SET NULL"), unique=True, index=True
+    )
+    headline: Mapped[str] = mapped_column(Text, nullable=False)
+    summary: Mapped[str | None] = mapped_column(Text)
+    original_url: Mapped[str] = mapped_column(String(1024), unique=True, index=True, nullable=False)
+    publisher: Mapped[str] = mapped_column(String(128), nullable=False)
+    category: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    related_symbols: Mapped[dict] = mapped_column(JSON, default=list, nullable=False)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    fingerprint: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
+    processing_status: Mapped[str] = mapped_column(String(32), default="processed", nullable=False)
+
+
+class NewsCollectionRun(Base):
+    """One news collection run, for audit and recovery."""
+
+    __tablename__ = "news_collection_runs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    source_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("news_sources.id", ondelete="SET NULL"), index=True
+    )
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    status: Mapped[str] = mapped_column(String(32), default="running", nullable=False)
+    found: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    skipped: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    error_message: Mapped[str | None] = mapped_column(Text)
+
+
+class MarketCollectionRun(Base):
+    """One market or futures collection run (job audit)."""
+
+    __tablename__ = "market_collection_runs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    job_name: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    status: Mapped[str] = mapped_column(String(32), default="running", nullable=False)
+    symbols_requested: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    symbols_collected: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    error_message: Mapped[str | None] = mapped_column(Text)
+
+
+class FuturesMarketRatio(Base):
+    """A long/short ratio snapshot.
+
+    FuturesSnapshot has no ratio fields, so this is a
+    genuinely new table. Account ratios and position
+    ratios are different datasets and are stored under
+    different ratio_type values, never merged: global
+    account, top-trader account, top-trader position,
+    and taker buy/sell volume. For taker data the
+    stored long/short values are buy/sell volumes and
+    long_short_ratio is the buy/sell ratio, as labelled
+    in the documentation.
+    """
+
+    __tablename__ = "futures_market_ratios"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    symbol: Mapped[str] = mapped_column(String(32), index=True, nullable=False)
+    ratio_type: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    long_ratio: Mapped[Decimal | None] = mapped_column(Numeric(20, 8))
+    short_ratio: Mapped[Decimal | None] = mapped_column(Numeric(20, 8))
+    long_short_ratio: Mapped[Decimal | None] = mapped_column(Numeric(20, 8))
+    period: Mapped[str | None] = mapped_column(String(32))
+    source: Mapped[str] = mapped_column(String(64), default="binance_futures", nullable=False)
+    collected_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, index=True, nullable=False
+    )
+
+
 class AuditLog(Base, TimestampMixin):
     """Append-only record of administrative actions."""
 
