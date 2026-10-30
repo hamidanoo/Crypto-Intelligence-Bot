@@ -56,6 +56,22 @@ class Settings(BaseSettings):
     # Phase 4 intelligence processing interval, in seconds.
     intelligence_processing_interval_seconds: int = 600
 
+    # Phase 6 competition volume tracker. The scheduler
+    # interval is 30 minutes to match the interval
+    # boundaries; only completed intervals are ever
+    # collected, so APScheduler not firing exactly on
+    # :00/:30 is safe. Backfill is capped per pair per
+    # run to bound Binance API usage. Volume Telegram
+    # reports follow the Phase 3 pattern: they are sent
+    # only when this flag is on AND a bot token and
+    # group id are configured; without them, sending is
+    # skipped (not marked sent) and live delivery stays
+    # unverified.
+    volume_tracking_interval_minutes: int = 30
+    volume_backfill_max_intervals_per_pair: int = 48
+    volume_max_pages_per_interval: int = 50
+    volume_notifications_enabled: bool = True
+
     @model_validator(mode="after")
     def _validate_production_secret(self):
         if self.environment == "production" and (

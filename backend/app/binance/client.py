@@ -221,6 +221,63 @@ class BinanceClient:
             )
         return klines
 
+    async def get_agg_trades(
+        self,
+        symbol: str,
+        *,
+        from_id: int | None = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
+        limit: int = 1000,
+    ) -> list[dict]:
+        """Spot aggregate trades for one symbol.
+
+        Follows the existing retry/proxy/SSL handling in
+        _request, so transient failures (429, 5xx,
+        transport errors) are retried and a
+        restricted-location response surfaces as a
+        BinanceAPIError, never as fabricated trades.
+        Quantities are returned as strings so callers
+        can convert them to Decimal without float loss.
+        Note: the aggTrades response carries price (p)
+        and quantity (q) but no quote quantity field,
+        so quote_qty is derived here as price x qty
+        using Decimal arithmetic on the trade's own
+        strings (never floats); when a quote quantity
+        field is present it is used as returned.
+        """
+        symbol = validate_symbol(symbol)
+        params: dict = {"symbol": symbol, "limit": max(1, min(limit, 1000))}
+        if from_id is not None:
+            params["fromId"] = int(from_id)
+        if start_time is not None:
+            params["startTime"] = int(start_time.timestamp() * 1000)
+        if end_time is not None:
+            params["endTime"] = int(end_time.timestamp() * 1000)
+        rows = await self._request(self.spot_base_url, "/api/v3/aggTrades", params)
+        trades = []
+        for row in rows:
+            price = str(row["p"])
+            qty = str(row["q"])
+            if "Q" in row and row["Q"] is not None:
+                quote_qty = str(row["Q"])
+            else:
+                from decimal import Decimal
+
+                quote_qty = str(Decimal(price) * Decimal(qty))
+            trades.append(
+                {
+                    "trade_id": int(row["a"]),
+                    "price": price,
+                    "qty": qty,
+                    "quote_qty": quote_qty,
+                    "timestamp": _utc_from_ms(int(row["T"])),
+                    "is_buyer_maker": bool(row.get("m", False)),
+                    "source": "binance_spot_aggtrades",
+                }
+            )
+        return trades
+
     # Futures ------------------------------------------------------------
 
     async def futures_ping(self):
