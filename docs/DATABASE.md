@@ -114,9 +114,37 @@
     entity_type "competition" (unique on entity,
     entity id, and notification type); no separate
     notification table was created.
-- Later phases add the volume snapshot, market,
-  futures, news, notification, template, and job
-  tables, each with its own migration and the same
-  UTC and uniqueness rules.
+- Phase 6 volume tracker (migration `0007`):
+  - `competition_volume_intervals` — one row per
+    competition+pair+30-minute interval (unique on
+    that triple), with public base/quote volumes,
+    estimated eligible volume (only with a verified
+    multiplier, else null), official eligible volume
+    (always null in Phase 6), calculation method,
+    data status (complete/partial/incomplete),
+    recalculated flag, and collected time.
+  - `competition_volume_checkpoints` — per-pair
+    resume point (last interval end, last trade id),
+    unique on competition+pair.
+  - `competition_volume_collection_runs` — one row
+    per competition per collection, with
+    found/created/updated/skipped counts, status,
+    and error message.
+  - `competition_volume_reports` — one Telegram
+    report attempt per competition+pair+interval
+    (unique on that triple), with status
+    (sent/failed/pending), sent time, and error
+    message; a sent report is never re-sent.
+  - `competition_pair_configurations` — per-pair
+    multiplier (applied only when verified),
+    tracking toggle, calculation method, and note,
+    unique on competition+pair.
+  All volume timestamps are UTC and all volume
+  columns are Numeric (Decimal); see
+  `docs/VOLUME_TRACKER.md`.
+- Later phases add the market, futures, news,
+  notification, template, and job tables, each with
+  its own migration and the same UTC and uniqueness
+  rules.
 - Backups and restore procedures are documented in
   `docs/BACKUP_RESTORE.md`.

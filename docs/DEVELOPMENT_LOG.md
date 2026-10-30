@@ -504,3 +504,52 @@ performed in this phase.
   processing of a non-Alpha (TRADING_COMPETITION)
   competition announcement. See
   docs/COMPETITION_INTELLIGENCE.md.
+
+## Phase 6 — Competition Volume Tracker (2026-10-30)
+
+- Implemented 30-minute UTC volume tracking for
+  Phase 5 competitions on branch
+  `phase-06-volume-tracker` (from Phase 5 head
+  `93d4ee67`): models + migration `0007`, interval
+  engine, aggTrades collection/backfill, scheduler
+  job `competition_volume_tracking` (30 minutes,
+  max_instances=1), Telegram interval reports,
+  `/competition-volume` API routes (no `/api/v1`
+  prefix, per existing router conventions; the
+  divergence is documented in `docs/API.md` and
+  `docs/VOLUME_TRACKER.md`), and a Competition
+  Volume section on the home page (Recharts chart,
+  already a dependency).
+- Decisions: aggTrades over klines (boundary
+  accuracy) and over rolling-24h-ticker subtraction
+  (forbidden, never used); public vs estimated
+  (verified multiplier only) vs official (always
+  null in Phase 6) kept strictly separate in code,
+  API, Telegram, and frontend; cumulative volume
+  only from stored intervals; checkpoint advances
+  only over a contiguous complete/partial prefix so
+  an incomplete interval is retried next run.
+- Live findings that changed the code (both covered
+  by tests): aggTrades has no quote-quantity field,
+  so quote volume is derived as Decimal(price) x
+  Decimal(qty) per trade; Binance rejects fromId
+  combined with startTime/endTime, so collection
+  pages windowed first, then fromId-only, with
+  bucketing filtering every page to the interval.
+- Live smoke test via `data-api.binance.vision`
+  (BTCUSDT 10:00–10:30 UTC 2026-10-30): 26,000
+  trades fetched, 24,208 in-interval after
+  bucketing, base 426.84376 BTC, quote
+  33,070,381.6869031 USDT. `api.binance.com`
+  returned HTTP 451 code 0 (restricted location).
+  No competition interval was written from it.
+- Tests: full suite 103 passed (29 new Phase 6
+  tests); `ruff check`, `ruff format --check`,
+  `black --check` pass; Alembic upgrade to `0007`
+  against SQLite succeeded (29 tables); `npm run
+  build` succeeded.
+- Not verified live: PostgreSQL migration `0007`,
+  Docker run, Telegram delivery (mock only),
+  production scheduler run, official eligible volume
+  source, leaderboard data. Manual collect remains
+  ungated until Phase 8 auth. Phase 7 NOT started.

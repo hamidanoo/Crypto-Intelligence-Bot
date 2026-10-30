@@ -9,10 +9,11 @@ wallet signing.
 
 ## Current status
 
-Phase 1 — Project Foundation is complete on branch
-`phase-01-foundation`. See `PROJECT_STATUS.md` for the current phase,
-test results, and limitations. No later phase has been started, and
-nothing has been merged into `main`.
+Phase 6 — Competition Volume Tracker is complete on
+branch `phase-06-volume-tracker`. See
+`PROJECT_STATUS.md` for the current phase, test
+results, and limitations. Nothing has been merged
+into `main`.
 
 ## Architecture
 
@@ -74,6 +75,7 @@ environment, install `requirements.txt`, and start it with
 - `CHANGELOG.md` — changes by phase
 - `docs/DEVELOPMENT_LOG.md` — decisions, issues, and testing
 - `docs/ARCHITECTURE.md`, `docs/DATABASE.md`, `docs/API.md`
+- `docs/VOLUME_TRACKER.md` — Phase 6 volume methodology
 - `docs/TELEGRAM_SETUP.md`, `docs/API_CONFIGURATION.md`,
   `docs/ADMIN_GUIDE.md`
 - `docs/WINDOWS_SETUP.md`, `docs/VPS_DEPLOYMENT.md`,

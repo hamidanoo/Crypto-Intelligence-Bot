@@ -153,6 +153,44 @@ volume aggregation is Phase 6 work.
 - `GET /competitions/{id}/pairs` — normalised trading pairs, rewards, and rules for the competition.
 - `POST /competitions/collect` — collects announcements via the Phase 3 service, then processes TRADING_COMPETITION announcements. Response: `{category: "TRADING_COMPETITION", found, created, updated, skipped, errors, status_updates}`; 502 if announcement collection fails.
 
+## Phase 6 endpoints
+
+All Phase 6 endpoints use real database data; no
+volume is fabricated. Financial values are
+serialised as strings, so Decimal precision
+survives JSON. Database failures return HTTP 503,
+missing records return 404, and invalid input
+returns 400. Manual collection is not admin-gated
+in this phase (authentication is Phase 8), so it
+must only be exposed behind the deployment's own
+access controls.
+
+Route naming divergence, stated explicitly: the
+routes are `/competition-volume` (no `/api/v1`
+prefix), matching the existing routers
+(`/announcements`, `/alpha`, `/competitions`). The
+frontend calls `/api/competition-volume`, which the
+frontend proxy maps to this backend route. There is
+no `/api/v1/competition-volume` route.
+
+Accuracy labels are part of the contract: public
+market volume comes from Binance public trade data
+(aggTrades); estimated eligible volume is present
+only with a verified multiplier, otherwise null;
+official eligible volume is always null in Phase 6
+and is serialised as null (displayed "Unavailable"
+by clients), never zero. Official leaderboard data
+is not implemented.
+
+- `GET /competition-volume?competition_id=&trading_pair=&interval_from=&interval_to=&data_status=&page=1&page_size=20&sort=interval_start_desc` — paginated intervals. Sort values: `interval_start_desc` (default), `interval_start_asc`, `public_quote_volume_desc`. Items include competition id, pair, base/quote assets, interval start/end (UTC), public base/quote volumes (strings or null), estimated eligible volume (string or null), official eligible volume (always null), calculation method, data status (complete/partial/incomplete), recalculated flag, and collected time.
+- `GET /competition-volume/collection-runs?competition_id=&page=1&page_size=20` — volume collection runs, newest first, with found/created/updated/skipped counts, status, and error message.
+- `GET /competition-volume/{id}` — intervals for one competition (same filters as the list, minus competition_id); 404 if the competition is missing.
+- `GET /competition-volume/{id}/pairs` — pairs for the competition with tracking toggle, multiplier and verification flag, checkpoint end, and latest interval per pair.
+- `GET /competition-volume/{id}/history?trading_pair=&page=1&page_size=20&sort=interval_start_desc` — paginated interval history for one competition, optionally for one pair.
+- `GET /competition-volume/{id}/summary` — per-pair latest interval, cumulative public base/quote volumes (sums of stored complete/partial intervals), cumulative estimated eligible volume (null when no interval has an estimate), interval count, last collection time/status, and official eligible volume (null, with display "Unavailable").
+- `POST /competition-volume/collect` — collects volumes for ACTIVE/UPCOMING competitions. (The scheduler job, not this endpoint, then runs the Telegram reporting pass.) Response: `{competitions, intervals_found, intervals_created, intervals_updated, intervals_skipped, intervals_completed, errors, error_messages}`; 502 when the whole collect fails upstream with nothing usable collected, 503 on database errors.
+- `POST /competition-volume/{id}/collect` — collects volumes for one competition regardless of status; same response and error codes; 404 if the competition is missing.
+
 ## Later phases
 
 Later phases add versioned, authenticated API routes for

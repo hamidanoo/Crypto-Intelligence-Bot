@@ -59,7 +59,21 @@ Nginx (reverse proxy: / -> frontend, /api/ -> backend)
   `backend/app/competitions/` (parsing, processing,
   notifications, scheduler jobs); the API layer is
   `backend/app/api/competitions.py`, and bot commands
-  live in `backend/app/bot.py`. APScheduler remains
+  live in `backend/app/bot.py`. Phase 6 adds one more
+  job on the same scheduler,
+  `competition_volume_tracking`, every 30 minutes,
+  max_instances=1, which collects newly completed
+  30-minute volume intervals from Binance Spot
+  aggTrades for ACTIVE/UPCOMING competitions and
+  then runs the Telegram reporting pass; only
+  completed intervals are processed, so the job
+  firing off :00/:30 boundaries is safe. Phase 6
+  logic lives in `backend/app/volume/` (intervals,
+  aggregation, collection, reporting, scheduler
+  jobs); the API layer is
+  `backend/app/api/volume.py`, and the home page
+  gains a Competition Volume section (not the full
+  Phase 8 dashboard). APScheduler remains
   single-instance only; distributed coordination is deferred.
 
 ## Later phases

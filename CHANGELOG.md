@@ -1,5 +1,63 @@
 # Changelog
 
+## Phase 6 — Competition Volume Tracker
+
+- Add volume models and migration 0007:
+  `competition_volume_intervals`,
+  `competition_volume_checkpoints`,
+  `competition_volume_collection_runs`,
+  `competition_volume_reports`, and
+  `competition_pair_configurations`, with unique
+  constraints, indexes, UTC timestamps, and Decimal
+  volume fields. No old migration was modified.
+- Add `BinanceClient.get_agg_trades` (Spot
+  aggTrades, same retry/proxy/SSL patterns as the
+  existing client), including two behaviours found
+  live: the response carries no quote-quantity
+  field, so quote volume is derived per trade as
+  price x qty in Decimal, and fromId must not be
+  combined with startTime/endTime.
+- Add the 30-minute UTC interval engine, Decimal
+  trade bucketing with trade-id dedup and
+  competition-window filtering, partial-boundary
+  handling, and cumulative volume computed only
+  from stored intervals.
+- Add collection/backfill with per-pair
+  checkpoints, 24h lookback without a start date,
+  a 48-interval per-pair per-run cap, a 50-page
+  guard, idempotent upserts with late-trade
+  recalculation, incomplete-vs-empty distinction,
+  and per-pair failure isolation.
+- Add one scheduler job on the existing
+  APScheduler instance
+  (`competition_volume_tracking`, every 30
+  minutes, max_instances=1) that collects completed
+  intervals and then runs Telegram reporting.
+- Add Telegram volume reports (public, estimated
+  with method, official "Unavailable", data status,
+  cumulative volume, UTC + PKT periods) with
+  sent-report duplicate prevention and failed
+  report retry in place; incomplete intervals get
+  no report. Live delivery not tested (no token).
+- Add volume API endpoints (no `/api/v1` prefix,
+  matching existing routers; the divergence is
+  documented): interval list, per-competition
+  intervals, pairs, history, summary, collection
+  runs, and manual collect, with pagination,
+  Decimal-as-string serialisation, and 404/502/503
+  handling. Manual collect is not admin-gated
+  until Phase 8.
+- Add a Competition Volume section to the existing
+  home page (selectors, latest and cumulative
+  volumes, history table, Recharts chart — no new
+  dependency), using only real backend data. The
+  full Phase 8 dashboard is not built.
+- Add settings `VOLUME_TRACKING_INTERVAL_MINUTES`,
+  `VOLUME_BACKFILL_MAX_INTERVALS_PER_PAIR`,
+  `VOLUME_MAX_PAGES_PER_INTERVAL`, and
+  `VOLUME_NOTIFICATIONS_ENABLED`, and document
+  the methodology in `docs/VOLUME_TRACKER.md`.
+
 ## Phase 5 — Binance Trading Competition Intelligence
 
 - Add competition models and migration 0006:
