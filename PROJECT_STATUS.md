@@ -2,7 +2,7 @@
 
 - **Current phase:** Phase 1 — Project Foundation
 - **Current branch:** `phase-01-foundation`
-- **Latest commit:** To be filled in after the Phase 1 push is verified.
+- **Latest commit:** `774e54249f9aa2e32be22b420a969d8cb66f67e9` — "Set up Phase 1 project foundation", on `phase-01-foundation`, verified by reading the branch back after the push.
 - **Merged into main:** No. Merging requires explicit approval.
 
 ## Completed features (Phase 1)
