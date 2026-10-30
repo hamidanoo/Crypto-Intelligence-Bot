@@ -9,8 +9,8 @@ wallet signing.
 
 ## Current status
 
-Phase 6 — Competition Volume Tracker is complete on
-branch `phase-06-volume-tracker`. See
+Phase 7 — Market, Futures & News Intelligence is complete on
+branch `phase-07-market-futures-news`. See
 `PROJECT_STATUS.md` for the current phase, test
 results, and limitations. Nothing has been merged
 into `main`.

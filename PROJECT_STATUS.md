@@ -1,9 +1,61 @@
 # Project Status
 
-- **Current phase:** Phase 6 — Competition Volume Tracker
-- **Current branch:** `phase-06-volume-tracker`, created from `phase-05-competition-intelligence` at `93d4ee671bb7458884f1c4642845d073da83a937` (verified remotely before creation)
-- **Latest commit:** See the Phase 6 report for the verified branch head and each Phase 6 commit hash. This file follows the established pattern: a status file cannot contain its own commit hash, so the head commit is reported alongside this file, not inside it.
+- **Current phase:** Phase 7 — Market, Futures & News Intelligence
+- **Current branch:** `phase-07-market-futures-news`, created from `phase-06-volume-tracker` at `6d2a49798831057e6d230801d180693c32870dd9` (verified remotely before creation)
+- **Latest commit:** See the Phase 7 report for the verified branch head and each Phase 7 commit hash. This file follows the established pattern: a status file cannot contain its own commit hash, so the head commit is reported alongside this file, not inside it.
 - **Merged into main:** No. Merging requires explicit approval.
+
+## Completed features (Phase 7)
+
+- Market intelligence: overview from latest
+  `MarketSnapshot` rows with stale flags, top 10
+  gainers/losers with a minimum quote-volume
+  filter (low-liquidity symbols excluded, counted,
+  never presented as opportunities), watchlist
+  CRUD, and price/volume movement detection with
+  cooldown dedup (one alert per symbol + type per
+  60 minutes). Prices are never described as
+  trading opportunities.
+- Futures intelligence: funding rates and open
+  interest reuse `FuturesSnapshot`; long/short
+  ratios are new (`futures_market_ratios`) with
+  account, position, and taker datasets labelled
+  separately, never merged. Degraded mode is
+  mandatory: fapi HTTP 451 is recorded as
+  degraded/unavailable and never breaks Spot
+  collection or the app.
+- News intelligence: `CryptoNews` built from
+  Phase 3 announcements (no duplicates, unique
+  announcement id / URL / fingerprint), keyword
+  + category classification, listing/delisting
+  extraction from titles, summaries null when
+  article bodies are unavailable (never invented),
+  and a generic RSS collector driven by
+  `NewsSource` rows with no third-party feed
+  enabled by default.
+- Database migration `0008`: `market_watchlists`,
+  `market_alerts`, `news_sources`, `crypto_news`,
+  `news_collection_runs`, `market_collection_runs`,
+  `futures_market_ratios`. No old migration was
+  modified.
+- Six new scheduler jobs on the existing
+  scheduler (market snapshot, funding, open
+  interest, news, listing processing, movement
+  detection), each `max_instances=1`.
+- APIs `/market`, `/futures`, `/news` (no
+  `/api/v1` prefix, matching existing routers),
+  Telegram commands, and home-page Market,
+  Futures, and News sections with real data only.
+- Live smoke test: Spot collection via the
+  vision endpoint collected 5 symbols, news
+  processing created 140 items from 140
+  announcements, and Futures collection returned
+  502/unavailable (HTTP 451), with the summary
+  reporting unavailable — Spot unaffected.
+- External verification still required: live
+  PostgreSQL migration 0008, Docker run, live
+  Telegram delivery, production scheduler run,
+  and live Futures from an allowed location.
 
 ## Completed features (Phase 6)
 

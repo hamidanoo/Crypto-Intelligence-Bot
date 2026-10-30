@@ -148,3 +148,32 @@
   rules.
 - Backups and restore procedures are documented in
   `docs/BACKUP_RESTORE.md`.
+
+- Phase 7 tables (migration `0008`):
+  - `market_watchlists` — symbol (unique), note.
+  - `market_alerts` — symbol, alert_type, threshold,
+    baseline/current price, change percent,
+    triggered_at, cooldown_until, status, source;
+    indexed by symbol, type, triggered time.
+  - `news_sources` — name (unique), source_type,
+    feed_url, enabled, reliability note.
+  - `crypto_news` — source id, announcement id
+    (unique where present), headline, summary
+    (null when bodies unavailable), original URL
+    (unique), publisher, category, related symbols
+    (JSON), published at, fingerprint (unique),
+    processing status.
+  - `news_collection_runs` — source, started/
+    completed, status, found/created/skipped,
+    error message.
+  - `market_collection_runs` — job name, started/
+    completed, status, symbols requested/collected,
+    error message.
+  - `futures_market_ratios` — symbol, ratio_type
+    (global_account, top_account, top_position,
+    taker_buy_sell_volume), long/short values,
+    long/short ratio, period, source, collected at.
+  - Reused, not duplicated: `market_snapshots`
+    for prices and `futures_snapshots` for funding,
+    next funding time, mark price, and open
+    interest.

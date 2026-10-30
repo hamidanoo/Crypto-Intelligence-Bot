@@ -191,6 +191,37 @@ is not implemented.
 - `POST /competition-volume/collect` — collects volumes for ACTIVE/UPCOMING competitions. (The scheduler job, not this endpoint, then runs the Telegram reporting pass.) Response: `{competitions, intervals_found, intervals_created, intervals_updated, intervals_skipped, intervals_completed, errors, error_messages}`; 502 when the whole collect fails upstream with nothing usable collected, 503 on database errors.
 - `POST /competition-volume/{id}/collect` — collects volumes for one competition regardless of status; same response and error codes; 404 if the competition is missing.
 
+## Phase 7 endpoints
+
+Routes are `/market`, `/futures`, `/news` (no
+`/api/v1` prefix), matching existing routers;
+the frontend calls `/api/market` etc., which the
+proxy maps to these backend routes. Decimals are
+strings. Manual collect endpoints are ungated
+until Phase 8 authentication and must only be
+exposed behind deployment access controls.
+
+- `GET /market/overview?symbol=` — latest snapshot per symbol, with `is_stale` and freshness window.
+- `GET /market/prices?symbol=&page=&page_size=` — paginated latest snapshots.
+- `GET /market/gainers?limit=&min_quote_volume=` and `GET /market/losers` — top gainers/losers by 24h percent change, excluding symbols below the minimum quote volume (counted in `excluded_low_liquidity`).
+- `GET /market/{symbol}` — latest snapshot; 400 invalid symbol, 404 no data.
+- `GET /market/history?symbol=&collected_from=&collected_to=&page=&page_size=` — snapshot history.
+- `GET /market/watchlist`, `POST /market/watchlist` (symbol, note; duplicate returns `already_exists`), `DELETE /market/watchlist/{id}` (404 missing).
+- `GET /market/alerts?symbol=&alert_type=&triggered_from=&triggered_to=&page=&page_size=` — movement and funding alerts.
+- `POST /market/collect` — collects tracked symbols (or a body `symbols` list, max 20); 502 on Binance failure, 503 on database errors.
+- `GET /futures/funding?sort=highest|lowest&limit=` — latest funding rates; 400 invalid sort.
+- `GET /futures/funding/{symbol}`, `GET /futures/open-interest`, `GET /futures/open-interest/{symbol}` — 400 invalid symbol, 404 no data.
+- `GET /futures/ratios?symbol=&ratio_type=&page=&page_size=` — long/short ratios, each labelled by dataset type.
+- `GET /futures/summary` — availability (`available`/`degraded`/`unavailable`), highest/lowest funding, last collection status and error. Open interest alone does not imply direction.
+- `POST /futures/collect` — collects funding/open interest and ratios; 502 when the whole collection is unavailable (for example HTTP 451), 200 with `degraded` status on partial failure.
+- `GET /news?category=&publisher=&search=&published_from=&published_to=&page=&page_size=` — paginated news; 400 invalid category.
+- `GET /news/{id}` — 404 missing. Summary is "Summary unavailable" with `summary_available: false` when article bodies are unavailable.
+- `GET /news/categories` — category list with counts.
+- `GET /news/sources` — news sources with reliability notes.
+- `GET /news/collection-runs` — paginated collection runs.
+- `GET /news/listings`, `GET /news/delistings` — listing and delisting news.
+- `POST /news/collect` — processes stored announcements into news; returns found/created/skipped.
+
 ## Later phases
 
 Later phases add versioned, authenticated API routes for

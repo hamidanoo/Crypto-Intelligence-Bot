@@ -553,3 +553,50 @@ performed in this phase.
   production scheduler run, official eligible volume
   source, leaderboard data. Manual collect remains
   ungated until Phase 8 auth. Phase 7 NOT started.
+
+## Phase 7 — Market, Futures & News Intelligence (2026-10-30)
+
+- Reuse first: MarketSnapshot and FuturesSnapshot
+  already stored prices, funding, and open
+  interest, so no duplicate snapshot tables were
+  created. New tables are watchlists, alerts,
+  news sources, news, collection runs, and
+  long/short ratios only (migration 0008).
+- Market: overview from latest snapshots with
+  stale flags, gainers/losers with a minimum
+  quote-volume filter, watchlist CRUD, movement
+  detection with a 60-minute cooldown per
+  symbol + alert type. Movements are never
+  described as opportunities.
+- Futures: funding/open-interest collection
+  degrades on HTTP 451 (recorded, never raised
+  to break Spot); ratios are labelled by dataset
+  (account vs position vs taker volume), never
+  merged. Open interest alone never implies
+  direction.
+- News: built from stored announcements (no
+  duplicates, unique announcement id / URL /
+  fingerprint), keyword + category
+  classification, listing token extraction from
+  titles, summaries null when bodies are
+  unavailable. Generic RSS collector added with
+  no third-party feed enabled by default.
+- Tests: full suite 133 passed (29 new Phase 7
+  tests); ruff check, ruff format --check,
+  black --check pass; Alembic upgrade to 0008
+  against SQLite succeeded (36 tables); npm run
+  build succeeded.
+- Live smoke test: announcements 140 created,
+  market collect 5 symbols via
+  data-api.binance.vision, news collect 140
+  created, futures collect 502/unavailable
+  (HTTP 451 restricted location) with Spot
+  unaffected and the summary reporting
+  unavailable. No competition interval was
+  written from the smoke test.
+- Not verified live: PostgreSQL migration 0008,
+  Docker run, Telegram delivery (mock only),
+  production scheduler run, live Futures from an
+  allowed location, any RSS publisher feed.
+  Manual collect remains ungated until Phase 8
+  auth. Phase 8 NOT started.

@@ -1,5 +1,44 @@
 # Changelog
 
+## Phase 7 — Market, Futures & News Intelligence
+
+- Add market, futures, and news models and
+  migration 0008: `market_watchlists`,
+  `market_alerts`, `news_sources`, `crypto_news`,
+  `news_collection_runs`, `market_collection_runs`,
+  `futures_market_ratios`. Market prices reuse
+  `MarketSnapshot` and funding/open interest
+  reuse `FuturesSnapshot`; no duplicate snapshot
+  tables were created.
+- Add `BinanceClient.get_all_tickers_24hr`
+  (string values, Decimal-safe) and
+  `get_futures_long_short` (global account, top
+  account, top position, taker buy/sell volume,
+  each labelled separately).
+- Add market overview, gainers/losers with a
+  minimum quote-volume filter, watchlist CRUD,
+  movement detection with cooldown dedup, and
+  stale-data flags.
+- Add futures funding/open-interest collection
+  with mandatory degraded mode on HTTP 451,
+  funding alerts, open-interest change
+  calculation, and labelled long/short ratios.
+- Add news processing from Phase 3 announcements
+  (no duplicates, classification, listing/
+  delisting extraction, summaries null when
+  bodies are unavailable) and a generic RSS
+  collector with no third-party feed enabled by
+  default.
+- Add six scheduler jobs on the existing
+  scheduler, `/market`, `/futures`, and `/news`
+  API routers, Telegram market/futures/news
+  commands, and home-page Market, Futures, and
+  News sections with real data only.
+- Live smoke test: Spot via the vision endpoint
+  collected 5 symbols, news processing created
+  140 items, Futures returned 502/unavailable
+  (HTTP 451) with Spot unaffected.
+
 ## Phase 6 — Competition Volume Tracker
 
 - Add volume models and migration 0007:

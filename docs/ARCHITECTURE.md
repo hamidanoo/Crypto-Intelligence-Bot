@@ -76,6 +76,8 @@ Nginx (reverse proxy: / -> frontend, /api/ -> backend)
   Phase 8 dashboard). APScheduler remains
   single-instance only; distributed coordination is deferred.
 
+Phase 7 logic lives in `backend/app/marketintel/` (classification, service, notifications, scheduler jobs); the API layer is `backend/app/api/market.py`, `backend/app/api/futures.py`, and `backend/app/api/news.py`, and bot commands live in `backend/app/bot.py`. It adds six jobs on the same scheduler, each max_instances=1: `market_snapshot` (5 minutes), `funding_collection` (5 minutes), `open_interest_collection` (15 minutes), `news_collection` (5 minutes), `listing_processing` (5 minutes), and `market_movement_detection` (5 minutes). Futures collection degrades on HTTP 451 instead of failing the app, and news is built from stored announcements plus any deliberately enabled RSS source (none enabled by default). 
+
 ## Later phases
 
 Phases 2–7 add collectors and services inside the backend,
