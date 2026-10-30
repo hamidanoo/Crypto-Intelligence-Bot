@@ -243,6 +243,205 @@ class CollectionRun(Base):
     error_message: Mapped[str | None] = mapped_column(Text)
 
 
+class AlphaToken(Base, TimestampMixin):
+    """One Binance Alpha token, derived from an official
+    announcement. Fields that the announcement title does
+    not contain stay null; they are never invented. The
+    conventional USDT spot pair is recorded only as the
+    pair probed for market data, and trading_status stays
+    "announced" until trading availability is confirmed
+    in an announcement title. Market data is present only
+    when a Spot SYMBOLUSDT ticker was actually retrieved;
+    otherwise the price fields are null and
+    market_data_status is "unavailable", never zero."""
+
+    __tablename__ = "alpha_tokens"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    announcement_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("announcements.id", ondelete="CASCADE"),
+        unique=True,
+        index=True,
+        nullable=False,
+    )
+    token_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    token_symbol: Mapped[str | None] = mapped_column(String(64), index=True)
+    contract_address: Mapped[str | None] = mapped_column(String(128), index=True)
+    blockchain_network: Mapped[str | None] = mapped_column(String(64), index=True)
+    trading_status: Mapped[str] = mapped_column(String(64), default="announced", nullable=False)
+    trading_pairs: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    announcement_url: Mapped[str] = mapped_column(String(1024), nullable=False)
+    announcement_timestamp: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    token_metadata: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    data_source: Mapped[str] = mapped_column(
+        String(128), default="binance_website_cms", nullable=False
+    )
+    verification_status: Mapped[str] = mapped_column(
+        String(64), default="official_website", nullable=False
+    )
+    current_price: Mapped[Decimal | None] = mapped_column(Numeric(28, 8))
+    price_change_24h: Mapped[Decimal | None] = mapped_column(Numeric(28, 8))
+    volume_24h: Mapped[Decimal | None] = mapped_column(Numeric(28, 8))
+    market_data_source: Mapped[str | None] = mapped_column(String(128))
+    market_data_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    market_data_status: Mapped[str] = mapped_column(
+        String(32), default="unavailable", nullable=False
+    )
+
+
+class AlphaTokenUpdate(Base, TimestampMixin):
+    """A recorded change to an Alpha token: creation, or a
+    later price or trading-status change."""
+
+    __tablename__ = "alpha_token_updates"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    token_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("alpha_tokens.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    update_type: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    changes: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+
+
+class AirdropCampaign(Base, TimestampMixin):
+    """One Binance airdrop campaign, derived from an official
+    announcement. Dates, eligibility, and reward details
+    stay null when the announcement title does not contain
+    them; the announcement body is not fetched in this
+    phase, so most detail fields are expected to be null
+    and must be read as unconfirmed, not as absent."""
+
+    __tablename__ = "airdrop_campaigns"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    announcement_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("announcements.id", ondelete="CASCADE"),
+        unique=True,
+        index=True,
+        nullable=False,
+    )
+    campaign_name: Mapped[str] = mapped_column(String(512), nullable=False)
+    token_name: Mapped[str | None] = mapped_column(String(255))
+    token_symbol: Mapped[str | None] = mapped_column(String(64), index=True)
+    description: Mapped[str | None] = mapped_column(Text)
+    eligibility_summary: Mapped[str | None] = mapped_column(Text)
+    start_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    end_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    claim_period_start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    claim_period_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    distribution_schedule: Mapped[str | None] = mapped_column(Text)
+    reward_info: Mapped[str | None] = mapped_column(Text)
+    supported_networks: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    official_url: Mapped[str] = mapped_column(String(1024), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), default="UNKNOWN", index=True, nullable=False)
+
+
+class AirdropEligibility(Base, TimestampMixin):
+    """One eligibility requirement hinted at by an
+    announcement title. Title hints are not full
+    conditions, so is_confirmed_details is False for
+    every title-derived record in this phase."""
+
+    __tablename__ = "airdrop_eligibility"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    campaign_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("airdrop_campaigns.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    requirement_type: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    source_text: Mapped[str | None] = mapped_column(Text)
+    is_confirmed_details: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+
+class PrimeSale(Base, TimestampMixin):
+    """One Binance Prime Sale, derived from an official
+    announcement. Subscription, distribution, price, and
+    commitment fields stay null when the announcement
+    title does not contain them; they are never assumed
+    to follow any other sale's rules."""
+
+    __tablename__ = "prime_sales"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    announcement_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("announcements.id", ondelete="CASCADE"),
+        unique=True,
+        index=True,
+        nullable=False,
+    )
+    token_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    token_symbol: Mapped[str | None] = mapped_column(String(64), index=True)
+    sale_description: Mapped[str | None] = mapped_column(Text)
+    subscription_start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    subscription_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    distribution_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    trading_availability: Mapped[str | None] = mapped_column(String(255))
+    subscription_price: Mapped[Decimal | None] = mapped_column(Numeric(28, 8))
+    min_commitment: Mapped[Decimal | None] = mapped_column(Numeric(28, 8))
+    max_commitment: Mapped[Decimal | None] = mapped_column(Numeric(28, 8))
+    eligible_assets: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    allocation_methodology: Mapped[str | None] = mapped_column(Text)
+    reward_info: Mapped[str | None] = mapped_column(Text)
+    official_url: Mapped[str] = mapped_column(String(1024), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), default="UNKNOWN", index=True, nullable=False)
+
+
+class PrimeSaleAllocationRule(Base, TimestampMixin):
+    """The allocation rule recorded for one Prime Sale.
+    In this phase the rule is "unknown" unless an
+    announcement title states a methodology; the estimate
+    endpoint then still requires the caller to supply the
+    verified inputs, and never fabricates a total."""
+
+    __tablename__ = "prime_sale_allocation_rules"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    sale_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("prime_sales.id", ondelete="CASCADE"),
+        unique=True,
+        index=True,
+        nullable=False,
+    )
+    formula_type: Mapped[str] = mapped_column(String(64), default="unknown", nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    total_token_allocation: Mapped[Decimal | None] = mapped_column(Numeric(28, 8))
+    sale_price: Mapped[Decimal | None] = mapped_column(Numeric(28, 8))
+
+
+class CampaignNotification(Base, TimestampMixin):
+    """Duplicate prevention for module notifications:
+    one row per (entity_type, entity_id,
+    notification_type). A second attempt to record the
+    same notification finds this row and is skipped."""
+
+    __tablename__ = "campaign_notifications"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    entity_type: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    entity_id: Mapped[int] = mapped_column(Integer, index=True, nullable=False)
+    notification_type: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    announcement_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("announcements.id", ondelete="SET NULL")
+    )
+    status: Mapped[str] = mapped_column(String(32), default="pending", nullable=False)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    error_message: Mapped[str | None] = mapped_column(Text)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "entity_type",
+            "entity_id",
+            "notification_type",
+            name="uq_campaign_notifications_entity_type",
+        ),
+    )
+
+
 class AuditLog(Base, TimestampMixin):
     """Append-only record of administrative actions."""
 
