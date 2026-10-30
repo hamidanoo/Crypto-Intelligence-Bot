@@ -8,11 +8,11 @@ and collection runs: a restarted job simply reads
 the latest stored state and continues.
 """
 
+import asyncio
 import logging
 from datetime import datetime, timezone
 
-import httpx
-
+from app.auth.ssrf import fetch_feed
 from app.binance.client import BinanceClient
 from app.binance.service import collect_market_snapshots
 from app.config import settings
@@ -71,7 +71,11 @@ async def process_market_snapshot_job() -> dict:
 async def process_funding_job() -> dict:
     db = SessionLocal()
     try:
-        result = await collect_futures(db, _client(), _symbols())
+        try:
+            result = await collect_futures(db, _client(), _symbols())
+        except Exception as exc:  # noqa: BLE001 - job must not stop others
+            logger.warning("Funding collection job failed: %s", exc)
+            return {"error": str(exc)}
         try:
             funding_alerts(db)
         except Exception as exc:  # noqa: BLE001 - alerts must not hide collection
@@ -87,8 +91,12 @@ async def process_open_interest_job() -> dict:
     # rows (and ratios) on its own, slower schedule.
     db = SessionLocal()
     try:
-        result = await collect_futures(db, _client(), _symbols())
-        ratios = await collect_futures_ratios(db, _client(), _symbols())
+        try:
+            result = await collect_futures(db, _client(), _symbols())
+            ratios = await collect_futures_ratios(db, _client(), _symbols())
+        except Exception as exc:  # noqa: BLE001 - job must not stop others
+            logger.warning("Open interest job failed: %s", exc)
+            return {"error": str(exc)}
         return {**result, "ratios": ratios}
     finally:
         db.close()
@@ -97,19 +105,27 @@ async def process_open_interest_job() -> dict:
 async def process_news_job() -> dict:
     db = SessionLocal()
     try:
-        result = process_news(db)
+        try:
+            result = process_news(db)
+        except Exception as exc:  # noqa: BLE001 - job must not stop others
+            logger.warning("News collection job failed: %s", exc)
+            return {"error": str(exc)}
         # Enabled RSS sources, if any are ever added
-        # deliberately as NewsSource rows.
+        # deliberately as NewsSource rows. RSS fetching
+        # MUST go through the SSRF-protected fetcher
+        # (Phase 9 audit): the previous direct httpx
+        # call let any news_sources.manage holder point
+        # the scheduler at loopback/private addresses.
         from app.models import NewsSource
 
         for source in db.query(NewsSource).filter(NewsSource.enabled.is_(True)).all():
             if not source.feed_url:
                 continue
             try:
-                async with httpx.AsyncClient(timeout=10.0, trust_env=False) as client:
-                    response = await client.get(source.feed_url)
-                response.raise_for_status()
-                rss = collect_rss_items(db, source, parse_rss(response.text))
+                fetched = await asyncio.to_thread(fetch_feed, source.feed_url)
+                if fetched["status"] >= 400:
+                    raise ValueError(f"RSS feed returned HTTP {fetched['status']}")
+                rss = collect_rss_items(db, source, parse_rss(fetched["text"]))
                 result = {**result, "rss_created": result.get("rss_created", 0) + rss["created"]}
             except Exception as exc:  # noqa: BLE001 - one feed must not stop news
                 logger.warning("RSS source %s failed: %s", source.name, exc)
@@ -121,7 +137,11 @@ async def process_news_job() -> dict:
 async def process_listing_job() -> dict:
     db = SessionLocal()
     try:
-        return process_news(db, categories=["SPOT_LISTING", "FUTURES_LISTING", "DELISTING"])
+        try:
+            return process_news(db, categories=["SPOT_LISTING", "FUTURES_LISTING", "DELISTING"])
+        except Exception as exc:  # noqa: BLE001 - job must not stop others
+            logger.warning("Listing processing job failed: %s", exc)
+            return {"error": str(exc)}
     finally:
         db.close()
 
@@ -129,7 +149,11 @@ async def process_listing_job() -> dict:
 async def process_movement_job() -> dict:
     db = SessionLocal()
     try:
-        latest = latest_snapshots_by_symbol(db)
+        try:
+            latest = latest_snapshots_by_symbol(db)
+        except Exception as exc:  # noqa: BLE001 - job must not stop others
+            logger.warning("Movement detection job failed: %s", exc)
+            return {"error": str(exc)}
         # Previous snapshot per symbol: the second
         # newest row for that symbol.
         from app.models import MarketSnapshot
@@ -145,7 +169,11 @@ async def process_movement_job() -> dict:
             )
             if len(rows) >= 2:
                 previous[symbol] = rows[1]
-        alerts = detect_movements(db, list(latest.values()), previous)
+        try:
+            alerts = detect_movements(db, list(latest.values()), previous)
+        except Exception as exc:  # noqa: BLE001 - job must not stop others
+            logger.warning("Movement detection failed: %s", exc)
+            return {"error": str(exc)}
         return {"alerts": len(alerts)}
     finally:
         db.close()

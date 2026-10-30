@@ -110,7 +110,16 @@ async def login(
     user = db.query(AdminUser).filter(AdminUser.username == body.username).first()
     if user is None:
         # Same generic response and same audit shape as a
-        # wrong password: no account enumeration.
+        # wrong password: no account enumeration. The dummy
+        # Argon2 verify below makes the unknown-user path
+        # take similar time to a real password check, so
+        # timing does not leak account existence either.
+        # This hash is a timing dummy only, not a
+        # credential: it verifies nothing the user sent.
+        verify_password(
+            "$argon2id$v=19$m=65536,t=3,p=4$IGmpH9H3e55DC4wNG1KKnw$afRw+7dAhlucFi4GeNH8uv2HQxYXRnt4ileUvxCIFJo",
+            body.password,
+        )
         record_audit(
             db,
             actor=body.username,
@@ -132,6 +141,10 @@ async def login(
         )
         raise HTTPException(status_code=401, detail="Invalid username or password")
     if _lockout_active(user):
+        # Generic response (Phase 9 audit): a distinct
+        # lockout message lets anyone probe whether an
+        # account exists and is locked. The audit record
+        # still distinguishes the reason internally.
         record_audit(
             db,
             actor=user.username,
@@ -141,7 +154,7 @@ async def login(
             ip_address=ip,
             details={"reason": "account_locked"},
         )
-        raise HTTPException(status_code=401, detail="Account is temporarily locked")
+        raise HTTPException(status_code=401, detail="Invalid username or password")
     if not verify_password(user.password_hash, body.password):
         user.failed_login_attempts = (user.failed_login_attempts or 0) + 1
         if user.failed_login_attempts >= settings.login_max_attempts:
@@ -273,7 +286,13 @@ async def change_password(
 
 
 @router.post("/forgot-password")
-async def forgot_password(body: ForgotPasswordRequest, db: Session = Depends(get_db)):
+async def forgot_password(
+    request: Request, body: ForgotPasswordRequest, db: Session = Depends(get_db)
+):
+    # Same per-IP rate limit as login: without it this
+    # endpoint could be used to create reset-token rows
+    # without bound (Phase 9 audit).
+    check_login_rate_limit(request)
     user = (
         db.query(AdminUser)
         .filter(
@@ -283,6 +302,20 @@ async def forgot_password(body: ForgotPasswordRequest, db: Session = Depends(get
         .first()
     )
     if user is not None and user.is_active:
+        # Invalidate any outstanding reset tokens for this
+        # user and purge expired rows, so a reset request
+        # never leaves several live tokens behind.
+        now = datetime.now(timezone.utc)
+        for old in (
+            db.query(PasswordResetToken).filter(PasswordResetToken.admin_user_id == user.id).all()
+        ):
+            if old.used_at is None:
+                old.used_at = now
+        db.query(PasswordResetToken).filter(
+            PasswordResetToken.expires_at < now,
+            PasswordResetToken.used_at.isnot(None),
+        ).delete(synchronize_session=False)
+        db.commit()
         token = __import__("secrets").token_urlsafe(48)
         row = PasswordResetToken(
             admin_user_id=user.id,
@@ -297,11 +330,22 @@ async def forgot_password(body: ForgotPasswordRequest, db: Session = Depends(get
         # returned by this endpoint, so enumeration is
         # impossible through the response alone.
         logger.info("Password reset token created for admin user %s", user.username)
+        record_audit(
+            db,
+            actor=user.username,
+            action="password.reset.requested",
+            admin_user_id=user.id,
+            outcome="success",
+            ip_address=_client_ip(request),
+        )
     return {"message": _GENERIC_RESET_MESSAGE}
 
 
 @router.post("/reset-password")
-async def reset_password(body: ResetPasswordRequest, db: Session = Depends(get_db)):
+async def reset_password(
+    request: Request, body: ResetPasswordRequest, db: Session = Depends(get_db)
+):
+    check_login_rate_limit(request)
     token_hash = hashlib.sha256(body.token.encode()).hexdigest()
     row = db.query(PasswordResetToken).filter(PasswordResetToken.token_hash == token_hash).first()
     now = datetime.now(timezone.utc)
@@ -319,6 +363,23 @@ async def reset_password(body: ResetPasswordRequest, db: Session = Depends(get_d
     user.failed_login_attempts = 0
     user.locked_until = None
     row.used_at = now
+    # A password reset must have the same effect as a
+    # password change: every existing session is revoked,
+    # and every other outstanding reset token for this
+    # user is invalidated (Phase 9 audit). Otherwise a
+    # reset after a compromise leaves the attacker's
+    # sessions and tokens usable.
+    from app.models import AdminSession
+
+    db.query(AdminSession).filter(
+        AdminSession.admin_user_id == user.id,
+        AdminSession.revoked_at.is_(None),
+    ).update({"revoked_at": now}, synchronize_session=False)
+    db.query(PasswordResetToken).filter(
+        PasswordResetToken.admin_user_id == user.id,
+        PasswordResetToken.id != row.id,
+        PasswordResetToken.used_at.is_(None),
+    ).update({"used_at": now}, synchronize_session=False)
     db.commit()
     record_audit(
         db,
@@ -326,5 +387,6 @@ async def reset_password(body: ResetPasswordRequest, db: Session = Depends(get_d
         action="password.reset",
         admin_user_id=user.id,
         outcome="success",
+        ip_address=_client_ip(request),
     )
     return {"ok": True}

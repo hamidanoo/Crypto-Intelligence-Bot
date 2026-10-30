@@ -117,6 +117,15 @@ class Settings(BaseSettings):
     # non-production credential writes fail clearly.
     credential_encryption_key: str | None = None
     credential_encryption_key_previous: str | None = None
+    # Stable key-version identifiers (Phase 9 audit fix).
+    # Rows keep the key id they were encrypted under, so
+    # rotation never orphans existing credentials: rotate
+    # by giving the new key a new id and moving the old id
+    # to credential_encryption_key_previous_id. The legacy
+    # ids "current" and "previous" are still honoured on
+    # decrypt for rows written before this change.
+    credential_encryption_key_id: str = "v1"
+    credential_encryption_key_previous_id: str | None = None
     dashboard_refresh_interval_seconds: int = 60
 
     @model_validator(mode="after")
@@ -127,6 +136,23 @@ class Settings(BaseSettings):
             raise ValueError("SECRET_KEY must be set to a real value when ENVIRONMENT=production")
         if self.environment == "production" and not self.credential_encryption_key:
             raise ValueError("CREDENTIAL_ENCRYPTION_KEY must be set when ENVIRONMENT=production")
+        # A malformed key must fail fast in every
+        # environment, not only at first credential write:
+        # a key that is set but does not decode to 32
+        # bytes can never encrypt or decrypt anything.
+        for _label, _value in (
+            ("CREDENTIAL_ENCRYPTION_KEY", self.credential_encryption_key),
+            ("CREDENTIAL_ENCRYPTION_KEY_PREVIOUS", self.credential_encryption_key_previous),
+        ):
+            if _value:
+                import base64 as _base64
+
+                try:
+                    _decoded = _base64.b64decode(_value, validate=True)
+                except Exception as exc:
+                    raise ValueError(f"{_label} is not valid base64") from exc
+                if len(_decoded) != 32:
+                    raise ValueError(f"{_label} must decode to 32 bytes")
         return self
 
     @property

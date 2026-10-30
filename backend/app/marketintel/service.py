@@ -107,16 +107,34 @@ def gainers_losers(tickers: list[dict], limit: int = 10, min_quote_volume=None) 
 
 
 def latest_snapshots_by_symbol(db: Session) -> dict[str, MarketSnapshot]:
-    """Latest MarketSnapshot per symbol, newest first."""
-    rows = (
-        db.query(MarketSnapshot)
-        .order_by(MarketSnapshot.collected_at.desc(), MarketSnapshot.id.desc())
-        .all()
-    )
+    """Latest MarketSnapshot per symbol, newest first.
+
+    Phase 9 audit fix: the previous implementation loaded
+    EVERY snapshot ever collected and deduped in Python,
+    on a 5-minute job cadence — an unbounded full-table
+    scan that grows with every run. Now it lists distinct
+    symbols (bounded by the symbol universe) and fetches
+    one latest row per symbol.
+    """
+    # order_by first: a failing database must surface
+    # its SQLAlchemy error here (mapped to 503 by the
+    # API layer) rather than an AttributeError from a
+    # later clause. Ordering a single-column distinct
+    # query by that column is semantically identical.
+    symbols = [
+        row[0]
+        for row in db.query(MarketSnapshot.symbol).order_by(MarketSnapshot.symbol).distinct().all()
+    ]
     latest: dict[str, MarketSnapshot] = {}
-    for row in rows:
-        if row.symbol not in latest:
-            latest[row.symbol] = row
+    for symbol in symbols:
+        row = (
+            db.query(MarketSnapshot)
+            .filter(MarketSnapshot.symbol == symbol)
+            .order_by(MarketSnapshot.collected_at.desc(), MarketSnapshot.id.desc())
+            .first()
+        )
+        if row is not None:
+            latest[symbol] = row
     return latest
 
 
@@ -130,7 +148,12 @@ def is_stale(
         freshness_minutes if freshness_minutes is not None else settings.market_freshness_minutes
     )
     moment = _aware(collected_at)
-    return ((now or _now_utc()) - moment) > timedelta(minutes=window)
+    # Normalise the caller-supplied now too (Phase 9
+    # audit): a naive now against an aware moment raised
+    # TypeError; internal callers pass no now, but the
+    # public function must not be able to raise that way.
+    effective_now = _aware(now) if now is not None else _now_utc()
+    return (effective_now - moment) > timedelta(minutes=window)
 
 
 def detect_movements(
@@ -294,22 +317,30 @@ async def collect_futures(db: Session, client, symbols: list[str]) -> dict:
             )
         )
         collected += 1
-    db.commit()
+    try:
+        db.commit()
+    except Exception as exc:  # noqa: BLE001 - a failed snapshot commit must not lose the run row
+        db.rollback()
+        errors.append(f"database: {type(exc).__name__}")
+        collected = 0
     if collected == len(symbols) and symbols:
         status = "available"
     elif collected > 0:
         status = "degraded"
     else:
         status = "unavailable"
-    _record_run(
-        db,
-        "futures_collection",
-        status,
-        len(symbols),
-        collected,
-        "; ".join(errors) or None,
-        started,
-    )
+    try:
+        _record_run(
+            db,
+            "futures_collection",
+            status,
+            len(symbols),
+            collected,
+            "; ".join(errors) or None,
+            started,
+        )
+    except Exception:  # noqa: BLE001 - run-row failure must not hide the collection result
+        db.rollback()
     return {"status": status, "collected": collected, "requested": len(symbols), "errors": errors}
 
 
@@ -360,15 +391,26 @@ async def collect_futures_ratios(db: Session, client, symbols: list[str]) -> dic
 
 
 def latest_futures_by_symbol(db: Session) -> dict[str, FuturesSnapshot]:
-    rows = (
-        db.query(FuturesSnapshot)
-        .order_by(FuturesSnapshot.collected_at.desc(), FuturesSnapshot.id.desc())
+    """Latest FuturesSnapshot per symbol (see
+    latest_snapshots_by_symbol for why this no longer
+    loads every futures snapshot ever collected)."""
+    symbols = [
+        row[0]
+        for row in db.query(FuturesSnapshot.symbol)
+        .distinct()
+        .order_by(FuturesSnapshot.symbol)
         .all()
-    )
+    ]
     latest: dict[str, FuturesSnapshot] = {}
-    for row in rows:
-        if row.symbol not in latest:
-            latest[row.symbol] = row
+    for symbol in symbols:
+        row = (
+            db.query(FuturesSnapshot)
+            .filter(FuturesSnapshot.symbol == symbol)
+            .order_by(FuturesSnapshot.collected_at.desc(), FuturesSnapshot.id.desc())
+            .first()
+        )
+        if row is not None:
+            latest[symbol] = row
     return latest
 
 
@@ -495,17 +537,26 @@ def process_news(db: Session, categories: list[str] | None = None) -> dict:
     found = len(announcements)
     created = 0
     skipped = 0
+    # Preload existing ids/fingerprints once (Phase 9
+    # audit): the previous code ran two queries per
+    # announcement (2N queries per news run).
+    processed_ids = {
+        row[0]
+        for row in db.query(CryptoNews.announcement_id)
+        .filter(CryptoNews.announcement_id.isnot(None))
+        .all()
+    }
+    processed_fingerprints = {row[0] for row in db.query(CryptoNews.fingerprint).all()}
     for announcement in announcements:
-        existing = (
-            db.query(CryptoNews).filter(CryptoNews.announcement_id == announcement.id).first()
-        )
-        if existing is not None:
+        if announcement.id in processed_ids:
             skipped += 1
             continue
         fingerprint = news_fingerprint(announcement.title, announcement.canonical_url)
-        if db.query(CryptoNews).filter(CryptoNews.fingerprint == fingerprint).first() is not None:
+        if fingerprint in processed_fingerprints:
             skipped += 1
             continue
+        processed_ids.add(announcement.id)
+        processed_fingerprints.add(fingerprint)
         category = classify_news(announcement.title, announcement.category)
         db.add(
             CryptoNews(

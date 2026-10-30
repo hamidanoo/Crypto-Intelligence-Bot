@@ -48,7 +48,15 @@ async def collect_all_announcements() -> dict:
         summary = {"runs": 0, "created": 0, "skipped": 0, "failed": 0, "notified": 0}
         for src in sources:
             if src.last_success_at is not None:
-                elapsed = (_now_utc() - src.last_success_at).total_seconds()
+                # SQLite returns naive datetimes while
+                # PostgreSQL returns aware ones (Phase 9
+                # audit: this raised TypeError on every
+                # SQLite run after the first success and
+                # was masked as a generic failed run).
+                last_success = src.last_success_at
+                if last_success.tzinfo is None:
+                    last_success = last_success.replace(tzinfo=timezone.utc)
+                elapsed = (_now_utc() - last_success).total_seconds()
                 if elapsed < src.polling_interval_seconds:
                     continue
             client = BinanceAnnouncementClient(base_url=src.base_url)

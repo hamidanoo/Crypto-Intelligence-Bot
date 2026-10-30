@@ -93,19 +93,22 @@ def _handle_binance_error(exc: BinanceAPIError) -> HTTPException:
 async def binance_status(
     request: Request,
     client: BinanceClient = Depends(get_binance_client),
-    db: Session = Depends(get_db),
 ):
     """Basic API connection monitoring for Spot and Futures.
 
     Both pings run concurrently, each integration is reported
     separately and honestly, and a failure in one does not hide
     the other. No data is fabricated when an endpoint is
-    unavailable.
+    unavailable. This endpoint is deliberately side-effect
+    free (Phase 9 audit): an unauthenticated GET must not
+    write integration rows to the database. Last-success
+    timestamps are recorded by the authenticated collect
+    endpoints instead.
     """
     check_rate_limit(request)
     spot_result, futures_result = await asyncio.gather(client.spot_ping(), client.futures_ping())
     components: dict[str, dict] = {}
-    for name, result, base_url in (
+    for name, result, _base_url in (
         ("binance_spot", spot_result, settings.binance_spot_base_url),
         ("binance_futures", futures_result, settings.binance_futures_base_url),
     ):
@@ -115,10 +118,6 @@ async def binance_status(
             "latency_ms": latency_ms,
             "error": error,
         }
-        try:
-            record_integration_status(db, name, base_url, error is None, error)
-        except Exception as exc:  # noqa: BLE001 - monitoring must not fail the status call
-            logger.warning("Could not record %s integration status: %s", name, type(exc).__name__)
     overall = "ok" if all(c["status"] == "ok" for c in components.values()) else "degraded"
     return {
         "status": overall,
@@ -246,10 +245,20 @@ async def collect_market(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except BinanceAPIError as exc:
+        try:
+            record_integration_status(
+                db, "binance_spot", settings.binance_spot_base_url, False, str(exc)
+            )
+        except Exception:  # noqa: BLE001 - status bookkeeping must not mask the error
+            pass
         raise _handle_binance_error(exc) from exc
     except SQLAlchemyError as exc:
         logger.warning("Market collection database error: %s", type(exc).__name__)
         raise HTTPException(status_code=503, detail="Database unavailable for collection") from exc
+    # Integration status is recorded here, on an
+    # authenticated collect, instead of on the public
+    # GET /binance/status (Phase 9 audit).
+    record_integration_status(db, "binance_spot", settings.binance_spot_base_url, True, None)
     return {"collected": len(snapshots), "snapshots": [_serialise_snapshot(s) for s in snapshots]}
 
 
@@ -272,8 +281,15 @@ async def collect_futures(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except BinanceAPIError as exc:
+        try:
+            record_integration_status(
+                db, "binance_futures", settings.binance_futures_base_url, False, str(exc)
+            )
+        except Exception:  # noqa: BLE001 - status bookkeeping must not mask the error
+            pass
         raise _handle_binance_error(exc) from exc
     except SQLAlchemyError as exc:
         logger.warning("Futures collection database error: %s", type(exc).__name__)
         raise HTTPException(status_code=503, detail="Database unavailable for collection") from exc
+    record_integration_status(db, "binance_futures", settings.binance_futures_base_url, True, None)
     return {"collected": len(snapshots), "snapshots": [_serialise_snapshot(s) for s in snapshots]}

@@ -101,21 +101,52 @@ def register_jobs() -> None:
         (JOB_LISTINGS, process_listing_job, max(1, settings.news_collection_interval_minutes)),
         (JOB_MOVEMENT, process_movement_job, max(1, settings.market_snapshot_interval_minutes)),
     ]
+    # Paused-job flags are persisted in SystemSetting by
+    # the scheduler admin endpoints. A restart used to
+    # re-register every job as running while the flag
+    # still said paused, so the dashboard misreported a
+    # running job as disabled (Phase 9 audit). Restore
+    # the paused state here, after registration.
+    paused: set[str] = set()
+    try:
+        from app.api.admin_common import get_setting
+        from app.database import SessionLocal as _SessionLocal
+
+        _db = _SessionLocal()
+        try:
+            _flags = get_setting(_db, "scheduler_jobs", {}) or {}
+            paused = {k for k, v in _flags.items() if not (v or {}).get("enabled", True)}
+        finally:
+            _db.close()
+    except Exception:  # noqa: BLE001 - scheduler must start even if flags unreadable
+        logger.warning("Could not read persisted scheduler job flags", exc_info=True)
     for job_id, func, minutes in jobs:
         if scheduler.get_job(job_id) is None:
-            scheduler.add_job(
-                func,
-                "interval",
-                minutes=minutes,
-                id=job_id,
-                max_instances=1,
-                coalesce=True,
-                misfire_grace_time=60,
-                replace_existing=False,
-            )
+            try:
+                scheduler.add_job(
+                    func,
+                    "interval",
+                    minutes=minutes,
+                    id=job_id,
+                    max_instances=1,
+                    coalesce=True,
+                    misfire_grace_time=60,
+                    replace_existing=False,
+                )
+            except Exception:  # noqa: BLE001 - concurrent registration guard
+                # Another registration won the race (the
+                # check above is not atomic); the job is
+                # registered either way, so continue.
+                logger.info("Scheduled job %s already registered (race)", job_id)
+                continue
             logger.info("Scheduled job %s registered", job_id)
         else:
             logger.info("Job %s already registered", job_id)
+        if job_id in paused:
+            try:
+                scheduler.pause_job(job_id)
+            except Exception:  # noqa: BLE001 - pause failure must not break startup
+                logger.warning("Could not restore paused state for job %s", job_id)
 
 
 def start_scheduler() -> None:

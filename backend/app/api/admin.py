@@ -359,6 +359,31 @@ def _assign_role(db: Session, user: AdminUser, role_name: str) -> None:
     user.is_superuser = role_name == "super_admin"
 
 
+def _role_permission_set(db: Session, role_name: str) -> set[str]:
+    """Permissions a role would grant, for the escalation guard.
+
+    Builtin roles use the static matrix; custom roles created
+    through POST /admin/roles use their stored DB permissions
+    (Phase 9 audit: custom roles were previously rejected
+    here even though they existed in the database, so they
+    could never be assigned to a user).
+    """
+    from app.auth.permissions import ROLE_PERMISSIONS
+
+    if role_name in ROLE_PERMISSIONS:
+        return set(ROLE_PERMISSIONS[role_name])
+    role = db.query(AdminRole).filter(AdminRole.name == role_name).first()
+    if role is None:
+        raise HTTPException(status_code=400, detail=f"Unknown role: {role_name}")
+    keys = (
+        db.query(AdminPermission.key)
+        .join(AdminRolePermission, AdminRolePermission.permission_id == AdminPermission.id)
+        .filter(AdminRolePermission.role_id == role.id)
+        .all()
+    )
+    return {k[0] for k in keys}
+
+
 def _count_active_super_admins(db: Session) -> int:
     return (
         db.query(AdminUser)
@@ -392,14 +417,11 @@ async def create_user(
     _csrf=Depends(require_csrf),
     db: Session = Depends(get_db),
 ):
-    if body.role not in ("super_admin", "admin", "operator", "viewer"):
-        raise HTTPException(status_code=400, detail="Unknown role")
     # A caller cannot grant a role whose permissions they
     # do not themselves hold (privilege-escalation guard).
+    # Unknown role names are rejected by the helper.
     caller_permissions = user_permissions(db, user)
-    from app.auth.permissions import ROLE_PERMISSIONS
-
-    missing = ROLE_PERMISSIONS[body.role] - caller_permissions
+    missing = _role_permission_set(db, body.role) - caller_permissions
     if missing:
         raise HTTPException(status_code=403, detail="Cannot grant permissions you do not possess")
     if db.query(AdminUser).filter(AdminUser.username == body.username).first():
@@ -442,8 +464,9 @@ async def patch_user(
 ):
     target = _get_user_or_404(db, user_id)
     if body.role is not None:
-        if body.role not in ("super_admin", "admin", "operator", "viewer"):
-            raise HTTPException(status_code=400, detail="Unknown role")
+        # Unknown role names are rejected by the helper
+        # below (via the escalation guard's permission set).
+        _role_permission_set(db, body.role)
         # The last-active-Super-Admin guard runs before the
         # self-role-change guard, so demoting the final
         # Super Admin is reported as that specific error
@@ -456,9 +479,7 @@ async def patch_user(
             raise HTTPException(status_code=400, detail="Cannot demote the last active Super Admin")
         if target.id == user.id and body.role != target.role:
             raise HTTPException(status_code=403, detail="Cannot change your own role")
-        from app.auth.permissions import ROLE_PERMISSIONS
-
-        missing = ROLE_PERMISSIONS[body.role] - user_permissions(db, user)
+        missing = _role_permission_set(db, body.role) - user_permissions(db, user)
         if missing:
             raise HTTPException(
                 status_code=403, detail="Cannot grant permissions you do not possess"
@@ -479,7 +500,15 @@ async def patch_user(
         if target.id == user.id and body.is_active is False:
             raise HTTPException(status_code=403, detail="Cannot deactivate yourself")
         target.is_active = body.is_active
-    db.commit()
+    try:
+        db.commit()
+    except Exception as exc:  # noqa: BLE001 - duplicate email/username must be a 400, not a 500
+        db.rollback()
+        from sqlalchemy.exc import IntegrityError
+
+        if isinstance(exc, IntegrityError):
+            raise HTTPException(status_code=400, detail="Email or username already exists") from exc
+        raise
     audit(db, user, "admin.updated", entity="admin_user", entity_id=target.id)
     return _serialise_user(target, db)
 
@@ -584,13 +613,21 @@ async def patch_role(
             db.add(AdminRolePermission(role_id=role.id, permission_id=perm.id))
     if body.name is not None:
         role.name = body.name
-    db.commit()
+    try:
+        db.commit()
+    except Exception as exc:  # noqa: BLE001 - duplicate role name must be a 400, not a 500
+        db.rollback()
+        from sqlalchemy.exc import IntegrityError
+
+        if isinstance(exc, IntegrityError):
+            raise HTTPException(status_code=400, detail="Role name already exists") from exc
+        raise
     audit(db, user, "role.updated", entity="admin_role", entity_id=role.id)
     return _serialise_role(role, db)
 
 
 @router.get("/permissions")
-async def list_permissions(user=Depends(require_permission("users.view"))):
+async def list_permissions(user=Depends(require_permission("roles.view"))):
     return {"permissions": list(PERMISSIONS)}
 
 
@@ -615,12 +652,16 @@ async def list_audit_logs(
         query = query.filter(AuditLog.actor.ilike(f"%{actor}%"))
     if date_from:
         try:
-            query = query.filter(AuditLog.created_at >= datetime.fromisoformat(date_from))
+            # Normalise naive query strings to UTC (Phase 9
+            # audit): comparing a naive datetime against a
+            # timezone-aware column filters incorrectly or
+            # errors depending on the database backend.
+            query = query.filter(AuditLog.created_at >= _aware(datetime.fromisoformat(date_from)))
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid date_from")
     if date_to:
         try:
-            query = query.filter(AuditLog.created_at <= datetime.fromisoformat(date_to))
+            query = query.filter(AuditLog.created_at <= _aware(datetime.fromisoformat(date_to)))
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid date_to")
     total, items = paginate(query, page, page_size)

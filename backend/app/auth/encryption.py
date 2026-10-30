@@ -42,9 +42,27 @@ def _decode_key(value: str | None, label: str) -> bytes:
 
 
 def _key_for(key_id: str) -> bytes:
+    """Resolve a stored key id to its key material.
+
+    Stable version ids (settings.credential_encryption_key_id
+    and ..._previous_id) are used for rows written since
+    Phase 9. The legacy ids "current" and "previous" are
+    honoured for older rows. Any other id is an error:
+    silently falling back to the current key would mask
+    corrupt or rotated rows (Phase 9 audit).
+    """
+    if key_id == settings.credential_encryption_key_id:
+        return _decode_key(settings.credential_encryption_key, key_id)
+    if (
+        settings.credential_encryption_key_previous_id is not None
+        and key_id == settings.credential_encryption_key_previous_id
+    ):
+        return _decode_key(settings.credential_encryption_key_previous, key_id)
+    if key_id == "current":
+        return _decode_key(settings.credential_encryption_key, "current")
     if key_id == "previous":
         return _decode_key(settings.credential_encryption_key_previous, "previous")
-    return _decode_key(settings.credential_encryption_key, "current")
+    raise CredentialEncryptionError(f"Unknown credential encryption key id: {key_id}")
 
 
 def require_encryption_key() -> None:
@@ -63,13 +81,17 @@ def encrypt_secret(plaintext: str) -> dict:
     The nonce is fresh for every encryption, so identical
     plaintexts never produce identical ciphertexts.
     """
-    key = _key_for("current")
+    key = _decode_key(settings.credential_encryption_key, "current")
     nonce = os.urandom(12)
     ciphertext = AESGCM(key).encrypt(nonce, plaintext.encode("utf-8"), None)
     return {
         "ciphertext_b64": base64.b64encode(ciphertext).decode("ascii"),
         "nonce_b64": base64.b64encode(nonce).decode("ascii"),
-        "key_id": "current",
+        # Stable version id, not the literal "current":
+        # after rotation this row must still decrypt via
+        # the previous key, which is only possible if the
+        # id it was written under is preserved.
+        "key_id": settings.credential_encryption_key_id,
     }
 
 

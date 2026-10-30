@@ -108,12 +108,18 @@ async def list_news(
 async def news_categories(request: Request, db: Session = Depends(get_db)):
     check_rate_limit(request)
     try:
-        rows = db.query(CryptoNews).all()
+        # Aggregate in SQL (Phase 9 audit): the previous
+        # code loaded every news row and counted in Python.
+        from sqlalchemy import func
+
+        rows = (
+            db.query(CryptoNews.category, func.count(CryptoNews.id))
+            .group_by(CryptoNews.category)
+            .all()
+        )
     except SQLAlchemyError as exc:
         raise HTTPException(status_code=503, detail="Database unavailable") from exc
-    counts: dict[str, int] = {}
-    for row in rows:
-        counts[row.category] = counts.get(row.category, 0) + 1
+    counts: dict[str, int] = {row[0]: row[1] for row in rows}
     return {"categories": NEWS_CATEGORIES, "counts": counts}
 
 

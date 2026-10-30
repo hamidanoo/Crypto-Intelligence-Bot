@@ -36,6 +36,11 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Cache-Control"] = "no-store"
+        if settings.environment == "production":
+            # Only meaningful (and only safe to promise) when
+            # the API is served over HTTPS, which production
+            # deployment requires; see docs/VPS_DEPLOYMENT.md.
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
         return response
 
 
@@ -54,14 +59,29 @@ async def lifespan(_app: FastAPI):
     logger.info("Crypto Intelligence API shutting down")
 
 
-app = FastAPI(title="Crypto Intelligence API", version="0.1.0", lifespan=lifespan)
+# In production the interactive API docs are disabled: they
+# disclose every route and permission shape to unauthenticated
+# visitors. In development they remain available.
+_is_production = settings.environment == "production"
+app = FastAPI(
+    title="Crypto Intelligence API",
+    version="0.1.0",
+    lifespan=lifespan,
+    docs_url=None if _is_production else "/docs",
+    redoc_url=None if _is_production else "/redoc",
+    openapi_url=None if _is_production else "/openapi.json",
+)
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "Accept"],
+    # X-CSRF-Token is required by require_csrf on every
+    # state-changing authenticated request; omitting it
+    # from allow_headers broke direct cross-origin admin
+    # calls at preflight (Phase 9 audit).
+    allow_headers=["Authorization", "Content-Type", "Accept", "X-CSRF-Token"],
 )
 app.include_router(health_router)
 app.include_router(auth_router)

@@ -401,6 +401,12 @@ async def collect_one_competition(
                         checkpoint.last_trade_id = prefix_last_trade_id
                 db.commit()
         except Exception as exc:  # noqa: BLE001 - one pair must not stop other pairs
+            # Roll back first (Phase 9 audit): after a DB
+            # error SQLAlchemy requires rollback before
+            # the session can be used again, otherwise the
+            # next pair's checkpoint commit fails with
+            # PendingRollbackError and the run is lost.
+            db.rollback()
             logger.warning(
                 "Volume collection failed for competition %s pair %s: %s",
                 competition.id,

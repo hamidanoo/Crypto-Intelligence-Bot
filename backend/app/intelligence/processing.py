@@ -151,9 +151,13 @@ async def process_alpha(db: Session, market_client=None) -> dict:
             market_data_updated_at=_now_utc() if price is not None else None,
             market_data_status="available" if price is not None else "unavailable",
         )
+        # Single commit per entity (Phase 9 audit): the
+        # previous two-commit pattern left a token
+        # persisted without its creation update if the
+        # second commit failed, and a retry then skipped
+        # the announcement as already processed.
         db.add(token)
-        db.commit()
-        db.refresh(token)
+        db.flush()
         db.add(
             AlphaTokenUpdate(
                 token_id=token.id,
@@ -222,9 +226,10 @@ def process_airdrops(db: Session) -> dict:
             official_url=announcement.canonical_url,
             status=airdrop_status(announcement.title),
         )
+        # Single commit per entity (Phase 9 audit): see
+        # process_alpha for why two commits were unsafe.
         db.add(campaign)
-        db.commit()
-        db.refresh(campaign)
+        db.flush()
         for hint in hints:
             db.add(
                 AirdropEligibility(
@@ -264,9 +269,10 @@ def process_prime_sales(db: Session) -> dict:
             official_url=announcement.canonical_url,
             status=prime_sale_status(announcement.title),
         )
+        # Single commit per entity (Phase 9 audit): see
+        # process_alpha for why two commits were unsafe.
         db.add(sale)
-        db.commit()
-        db.refresh(sale)
+        db.flush()
         db.add(
             PrimeSaleAllocationRule(
                 sale_id=sale.id,

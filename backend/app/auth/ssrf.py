@@ -77,22 +77,31 @@ def fetch_feed(url: str) -> dict:
     current = validate_url(url)
     with httpx.Client(timeout=TIMEOUT_SECONDS, follow_redirects=False) as client:
         for hop in range(MAX_REDIRECTS + 1):
-            response = client.get(
+            with client.stream(
+                "GET",
                 current,
                 headers={"User-Agent": "Crypto-Intelligence/1.0 (RSS feed check)"},
-            )
-            if response.status_code in (301, 302, 303, 307, 308):
-                location = response.headers.get("location")
-                if not location or hop == MAX_REDIRECTS:
-                    raise SSRFBlockedError("Too many redirects or missing redirect target")
-                current = validate_url(urljoin(current, location))
-                continue
-            body = response.read()
-            if len(body) > MAX_BODY_BYTES:
-                body = body[:MAX_BODY_BYTES]
-            return {
-                "status": response.status_code,
-                "text": body.decode("utf-8", errors="replace"),
-                "final_url": current,
-            }
+            ) as response:
+                if response.status_code in (301, 302, 303, 307, 308):
+                    location = response.headers.get("location")
+                    if not location or hop == MAX_REDIRECTS:
+                        raise SSRFBlockedError("Too many redirects or missing redirect target")
+                    current = validate_url(urljoin(current, location))
+                    continue
+                # Stream with a hard cap (Phase 9 audit):
+                # reading the whole body first and truncating
+                # afterwards does not prevent memory exhaustion.
+                chunks: list[bytes] = []
+                total = 0
+                for chunk in response.iter_bytes(65536):
+                    total += len(chunk)
+                    if total > MAX_BODY_BYTES:
+                        raise SSRFBlockedError("Feed response exceeds the size limit")
+                    chunks.append(chunk)
+                body = b"".join(chunks)
+                return {
+                    "status": response.status_code,
+                    "text": body.decode("utf-8", errors="replace"),
+                    "final_url": current,
+                }
     raise SSRFBlockedError("Too many redirects")

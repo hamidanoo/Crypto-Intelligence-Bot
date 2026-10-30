@@ -29,7 +29,9 @@ from app.database import get_db
 from app.models import (
     ApiIntegration,
     CampaignNotification,
+    CollectionRun,
     CompetitionCollectionRun,
+    CompetitionVolumeCollectionRun,
     MarketCollectionRun,
     NewsSource,
     TelegramGroup,
@@ -58,7 +60,11 @@ ALLOWED_SCHEDULER_JOBS = {
 }
 
 _JOB_RUN_MODELS = {
-    "announcement_collection": None,
+    # Phase 9 audit: announcement and volume jobs
+    # previously showed last_run "unknown" even though
+    # their run rows exist.
+    "announcement_collection": CollectionRun,
+    "competition_volume_tracking": CompetitionVolumeCollectionRun,
     "competition_processing": CompetitionCollectionRun,
     "market_snapshot": MarketCollectionRun,
     "funding_collection": MarketCollectionRun,
@@ -499,6 +505,23 @@ async def trigger_job(
     db: Session = Depends(get_db),
 ):
     job = _scheduler_job_or_404(job_id)
+    # A paused job must not be triggered into running
+    # (Phase 9 audit): previously trigger reported
+    # success while a paused job silently did nothing
+    # (or fired despite the pause, depending on the
+    # scheduler backend). Resume first, then trigger.
+    flags = get_setting(db, "scheduler_jobs", {}) or {}
+    if flags.get(job_id, {}).get("enabled") is False:
+        raise HTTPException(
+            status_code=400, detail="Scheduler job is paused; resume it before triggering"
+        )
+    # No "scheduler not running" refusal here: modifying
+    # next_run_time is valid on a stopped scheduler and
+    # the run fires as soon as it starts again. Refusing
+    # would break trigger-while-stopped, which the
+    # scheduler controls test covers. The paused-job
+    # refusal above is the real guard: a paused job
+    # must never be triggered into running.
     # Schedule an immediate run through the existing
     # scheduler; the job function itself is never
     # invoked with caller-supplied arguments.

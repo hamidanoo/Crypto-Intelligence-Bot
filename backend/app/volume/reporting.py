@@ -172,7 +172,16 @@ async def send_volume_reports(db: Session, *, bot=None) -> dict:
                 status="pending",
             )
             db.add(report)
-            db.commit()
+            try:
+                db.commit()
+            except Exception:  # noqa: BLE001 - concurrent reporter won the race
+                # A concurrent reporting pass created the
+                # same (competition, pair, interval) row
+                # first; skip instead of aborting the
+                # whole reporting pass (Phase 9 audit).
+                db.rollback()
+                skipped += 1
+                continue
             db.refresh(report)
         else:
             report = existing
