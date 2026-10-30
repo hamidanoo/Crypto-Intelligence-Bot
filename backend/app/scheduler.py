@@ -27,11 +27,15 @@ def register_jobs() -> None:
     airdrop, and Prime Sale processing, each every 10
     minutes by default. Calling register_jobs twice does
     not register any job twice: an existing job with the
-    same id is left alone.
+    same id is left alone. Phase 6 adds one job:
+    competition volume tracking, every 30 minutes,
+    max_instances=1, processing only completed
+    intervals, then the Telegram reporting pass.
     """
     from app.announcements.scheduler_job import JOB_ID, collect_all_announcements
     from app.competitions.scheduler_jobs import JOB_COMPETITION, process_competition_job
     from app.config import settings
+    from app.volume.scheduler_jobs import JOB_VOLUME, process_volume_job
     from app.intelligence.scheduler_jobs import (
         JOB_AIRDROP,
         JOB_ALPHA,
@@ -62,6 +66,11 @@ def register_jobs() -> None:
             JOB_COMPETITION,
             process_competition_job,
             max(1, settings.intelligence_processing_interval_seconds // 60),
+        ),
+        (
+            JOB_VOLUME,
+            process_volume_job,
+            max(1, settings.volume_tracking_interval_minutes),
         ),
     ]
     for job_id, func, minutes in jobs:
