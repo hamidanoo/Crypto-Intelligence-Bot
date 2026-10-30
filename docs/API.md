@@ -96,10 +96,45 @@ behind the deployment's own access controls.
 - `POST /announcements/sources/{id}/collect` — same response shape for one source.
 - `PATCH /announcements/sources/{id}` — body (any subset): `{"enabled": true, "polling_interval_seconds": 300, "configuration": {...}}`. Polling interval must be 60–86400. Returns the updated source; 404 if missing.
 
+## Phase 4 endpoints
+
+All Phase 4 endpoints use real database data; no token,
+campaign, or sale is fabricated. Financial values are
+serialised as strings, so Decimal precision survives
+JSON. Database failures return HTTP 503, missing
+records return 404, and invalid input returns 400
+(422 for Pydantic validation of non-positive numbers).
+Manual collection endpoints are not admin-gated in
+this phase (authentication is Phase 8), so they must
+only be exposed behind the deployment's own access
+controls.
+
+Alpha:
+
+- `GET /alpha/tokens?page=1&page_size=20&symbol=&trading_status=&search=&sort=created_at_desc` — paginated tokens. Sort values: `created_at_desc` (default), `created_at_asc`, `token_name_asc`. Items include token name/symbol, contract address, network, trading status and pairs, announcement URL and timestamp, metadata, data source, verification status, current price, 24h change and volume, market data source, market data updated time, and market data status (`available` or `unavailable`; unavailable fields are null, never zero).
+- `GET /alpha/tokens/{id}` — one token; 404 if missing.
+- `GET /alpha/updates?page=1&page_size=20&token_id=&update_type=` — paginated token updates (creation and price updates).
+- `POST /alpha/collect` — collects announcements via the Phase 3 service, then processes ALPHA announcements. Response: `{category: "ALPHA", created, skipped}`; 502 if announcement collection fails.
+
+Airdrops:
+
+- `GET /airdrops?page=1&page_size=20&status=&symbol=&search=&sort=created_at_desc` — paginated campaigns, each with eligibility records. When a campaign has no eligibility records, `eligibility_note` is "Eligibility details not officially confirmed."
+- `GET /airdrops/active` — campaigns with status ACTIVE, UPCOMING, or CLAIMING.
+- `GET /airdrops/{id}` — one campaign; 404 if missing.
+- `POST /airdrops/collect` — collects announcements, then processes AIRDROP announcements; same response shape as Alpha collect.
+
+Prime Sales:
+
+- `GET /prime-sales?page=1&page_size=20&status=&symbol=&search=&sort=created_at_desc` — paginated sales, each with its allocation rule (formula_type "unknown" unless officially confirmed).
+- `GET /prime-sales/active` — sales with status ACTIVE or UPCOMING.
+- `GET /prime-sales/{id}` — one sale; 404 if missing.
+- `POST /prime-sales/collect` — collects announcements, then processes PRIME_SALE announcements.
+- `POST /prime-sales/estimate-allocation` — body: `{"user_commitment": "100", "total_commitment": "400", "total_token_allocation": "1000", "sale_price": null, "formula": null}`. All commitment/allocation values must be positive. Response includes `estimated_allocation` (string), the inputs, the formula, `is_estimate: true`, and a guarantee note stating the result is an estimate only, not a guaranteed allocation. A missing or zero total commitment is rejected, never replaced with an invented total.
+
 ## Later phases
 
-Later phases add versioned, authenticated API routes for Alpha,
-airdrops, Prime Sales, competitions, volume analytics, market,
-futures, news, listings, Telegram settings, integrations,
-scheduler control, audit logs, and system health. Those routes
+Later phases add versioned, authenticated API routes for
+competitions, volume analytics, market, futures, news,
+listings, Telegram settings, integrations, scheduler
+control, audit logs, and system health. Those routes
 are documented here as they are added, not in advance.

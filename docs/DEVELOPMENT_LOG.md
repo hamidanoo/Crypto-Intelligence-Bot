@@ -333,3 +333,88 @@ previous branch was merged or deleted.
   Compose run, Telegram delivery (mock only), and a
   production-environment collection run. See
   `docs/ANNOUNCEMENT_MONITOR.md`.
+
+## Phase 4 — Binance Alpha, Airdrop & Prime Sale Intelligence
+
+### Starting point verification
+
+Phase 4 was branched from `phase-03-announcement-monitor`
+at `94c9f96fa51a8d495ffc7ef79163e0146a59cdc5`, the
+verified Phase 3 head. No Phase 5 work, no merge into
+main, no history rewrite, and no branch deletion were
+performed in this phase.
+
+### Implementation decisions
+
+- The Phase 3 collector was reused unchanged: Phase 4
+  processing reads announcements the collector already
+  stored, by category, and creates at most one module
+  record per announcement. Scheduler jobs process
+  stored announcements rather than re-fetching the CMS
+  feed, so collection is not quadrupled.
+- Title parsing is deliberately conservative, because
+  announcement bodies are not fetched. A field that is
+  not in the title is null, a status that does not
+  match a listed phrase is UNKNOWN, and an allocation
+  rule that is not stated is "unknown". The estimate
+  endpoint then requires the caller to supply verified
+  inputs, including the total commitment.
+- Alpha market data uses the existing Phase 2 Spot
+  client, with the symbol's USDT pair. A failed lookup
+  (including a 400 for a symbol that does not trade on
+  Spot) leaves price fields null, never zero.
+- Allocation arithmetic uses Decimal only, and the
+  result is labelled an estimate in the API, the bot,
+  and the documentation.
+
+### Technical issues
+
+- Live smoke testing found that the current CMS first
+  page contains no PRIME_SALE announcements, 21 AIRDROP
+  announcements (mostly distribution completions, all
+  UNKNOWN under the conservative rules), and only 5
+  ALPHA announcements — trading competitions and
+  removal lists, not new token listings. The parser
+  initially turned a removal list into a single fake
+  token name (the text before the first parenthesis).
+  It was corrected: removal announcements are now
+  recorded as multi-token removal announcements with
+  no symbol, and competition titles are cleaned to the
+  token name (for example "Axis Robotics").
+- Numeric(28, 8) serialisation: a Decimal price of
+  2.50 serialises as "2.50000000" and an estimate of
+  250 serialises as "250.00" in some paths, because
+  Decimal preserves exponent. Tests were corrected to
+  compare Decimal values, not string spellings; the
+  API contract is Decimal-as-string, not a fixed
+  number of decimal places.
+
+### Testing performed
+
+- Backend tests: `pytest` from `backend/` — 52 passed
+  (31 Phase 1+2+3, 21 Phase 4; the Phase 4 file
+  contains 21 tests including parsing, allocation,
+  processing, notifications, scheduler registration,
+  API, and bot tests).
+- Lint/format: `ruff check`, `ruff format --check`,
+  and `black --check` all pass.
+- Alembic against SQLite: upgrade to `0005`
+  succeeded, current reports `0005` (head), 17 data
+  tables present (10 Phase 1–3 + 7 Phase 4).
+- Live CMS smoke test via the running API with a
+  SQLite database and Spot data via
+  data-api.binance.vision: first `/alpha/collect`
+  created 5 Alpha records, `/airdrops/collect`
+  created 21 campaigns, `/prime-sales/collect`
+  created 0 (no Prime Sale announcements in the live
+  first page). Alpha market data was unavailable for
+  the live symbols (400 from Spot for non-trading
+  symbols), correctly recorded as null/unavailable.
+- Frontend: `npm run build` succeeded.
+- Not tested live: PostgreSQL migration `0005`,
+  Docker Compose run, Telegram delivery (mock only),
+  a production-environment run, and live Prime Sale
+  processing against a real Prime Sale announcement.
+  See docs/ALPHA_INTELLIGENCE.md,
+  docs/AIRDROP_INTELLIGENCE.md, and
+  docs/PRIME_SALE_INTELLIGENCE.md.

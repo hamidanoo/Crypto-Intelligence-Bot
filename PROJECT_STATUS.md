@@ -1,9 +1,80 @@
 # Project Status
 
-- **Current phase:** Phase 3 — Announcement Monitor
-- **Current branch:** `phase-03-announcement-monitor`, created from `fix-phase1-phase2-issues` at `b77f6f74323f8a941e18998261963c1f633ab656` (verified remotely before creation)
-- **Latest commit:** `4e7882a1d3e208ab9d72d07b33a21cf683da926e` — "Add announcement API endpoints and status view", on `phase-03-announcement-monitor`, verified by reading the branch back after the push. A following status-update commit will head the branch after this file is pushed (see the Phase 3 report in chat). Earlier Phase 3 commits: `92378523f9ca2aa7b3a45779e5a7cee146c2ba56` (models), `dfd8eb39c999b90ca7392320eb5bf0111a849f6c` (collector).
+- **Current phase:** Phase 4 — Binance Alpha, Airdrop & Prime Sale Intelligence
+- **Current branch:** `phase-04-alpha-airdrop-prime`, created from `phase-03-announcement-monitor` at `94c9f96fa51a8d495ffc7ef79163e0146a59cdc5` (verified remotely before creation)
+- **Latest commit:** See the Phase 4 report for the verified branch head and each Phase 4 commit hash. This file follows the established pattern: a status file cannot contain its own commit hash, so the head commit is reported alongside this file, not inside it.
 - **Merged into main:** No. Merging requires explicit approval.
+
+## Completed features (Phase 4)
+
+- Binance Alpha intelligence: Alpha tokens from ALPHA
+  announcements, with token name/symbol, contract
+  address, network, trading status/pairs,
+  announcement URL/timestamp, metadata, data source,
+  verification status, and Decimal market data from
+  the Phase 2 Spot client when a SYMBOLUSDT ticker
+  exists; otherwise price fields are null and market
+  data status is "unavailable". Token updates record
+  creation and price changes. Multi-token removal
+  announcements are recorded as removal
+  announcements, never as a single fake token.
+- Binance Airdrop intelligence: campaigns from
+  AIRDROP announcements with conservative statuses
+  (UPCOMING/ACTIVE/ENDED/CLAIMING/
+  DISTRIBUTION_COMPLETED/CANCELLED/UNKNOWN, UNKNOWN
+  when no listed phrase matches), eligibility records
+  only for recognisable title hints (all with
+  unconfirmed details), and the API note "Eligibility
+  details not officially confirmed." when a campaign
+  has no eligibility records.
+- Binance Prime Sale intelligence: sales from
+  PRIME_SALE announcements with conservative statuses
+  and null detail fields when titles do not contain
+  them, one "unknown" allocation rule per sale, and a
+  Decimal-only proportional allocation estimator
+  labelled as an estimate, never a guarantee, that
+  rejects missing or zero totals.
+- Database models and migration `0005`:
+  `alpha_tokens`, `alpha_token_updates`,
+  `airdrop_campaigns`, `airdrop_eligibility`,
+  `prime_sales`, `prime_sale_allocation_rules`, and
+  `campaign_notifications`, with unique constraints,
+  indexes, UTC timestamps, and Decimal fields.
+- FastAPI endpoints: Alpha tokens, token detail,
+  token updates, airdrop list/active/detail, Prime
+  Sale list/active/detail, manual collection for
+  each module (collect via Phase 3, then process),
+  and allocation estimation. Pagination, filtering,
+  sorting, Decimal-as-string serialisation, 404/502/
+  503 handling. Manual collect endpoints are not
+  admin-gated until Phase 8 and must sit behind
+  deployment access controls.
+- Scheduler: three new idempotent jobs on the
+  existing APScheduler instance, each every 10
+  minutes, max_instances=1: `alpha_processing`,
+  `airdrop_processing`, `prime_sale_processing`.
+  APScheduler remains single-instance only
+  (documented).
+- Telegram: commands `/alpha [token]`, `/airdrop`,
+  `/airdrops active`, `/prime`, `/prime active`,
+  `/prime estimate <yours> <total> <allocation>`,
+  concise replies with source links where available
+  and "None recorded yet" when empty, plus
+  notification formatters with duplicate prevention
+  via `campaign_notifications`. Live delivery was
+  NOT tested (no token); mock formatting tests
+  cover the messages.
+- Frontend: a small real-data section on the
+  existing home page (latest Alpha tokens, active
+  airdrops, active Prime Sales, or "None recorded
+  yet") — not a dashboard (Phase 8).
+- Live smoke test: Alpha collect created 5, airdrop
+  collect created 21, Prime Sale collect created 0
+  (no Prime Sale announcements in the live first
+  page). Live Prime Sale processing, live PostgreSQL
+  migration `0005`, Docker Compose, and live Telegram
+  delivery remain unverified and are documented, not
+  faked.
 
 ## Completed features (Phase 3)
 

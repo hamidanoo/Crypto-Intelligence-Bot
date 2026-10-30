@@ -1,5 +1,58 @@
 # Changelog
 
+## Phase 4 — Binance Alpha, Airdrop & Prime Sale Intelligence
+
+- Add Alpha, airdrop, and Prime Sale models and
+  migration 0005: `alpha_tokens`, `alpha_token_updates`,
+  `airdrop_campaigns`, `airdrop_eligibility`,
+  `prime_sales`, `prime_sale_allocation_rules`, and
+  `campaign_notifications`, with unique constraints,
+  indexes, UTC timestamps, and Decimal financial fields.
+- Add title parsing for token name/symbol, contract
+  addresses, and networks, with conservative status
+  rules for airdrops and Prime Sales (anything not
+  matching a listed phrase is UNKNOWN) and eligibility
+  hints only for recognisable requirements. Removal
+  announcements listing many tokens are recorded as
+  multi-token removal announcements, never as a single
+  fake token (found and fixed during live testing).
+- Add announcement-to-module processing reusing the
+  Phase 3 collector, with deduplication by
+  announcement_id and Alpha market data from the
+  Phase 2 Spot client; unavailable market data stays
+  null with status "unavailable", never zero.
+- Add a Decimal-only proportional allocation estimator
+  for Prime Sales, labelled as an estimate, never a
+  guarantee, rejecting missing or zero totals.
+- Add Phase 4 API endpoints for Alpha tokens and
+  updates, airdrops (including active), Prime Sales
+  (including active), manual collection, and
+  allocation estimation, with pagination, filtering,
+  sorting, Decimal-as-string serialisation, 404/502/
+  503 handling. Manual collect endpoints are not
+  admin-gated until Phase 8 and must sit behind
+  deployment access controls.
+- Add three idempotent scheduler jobs on the existing
+  APScheduler instance (Alpha, airdrop, Prime Sale
+  processing, every 10 minutes, max_instances=1).
+- Add Telegram commands `/alpha [token]`, `/airdrop`,
+  `/airdrops active`, `/prime`, `/prime active`, and
+  `/prime estimate <yours> <total> <allocation>`, plus
+  notification formatters with duplicate prevention
+  via `campaign_notifications`. Live Telegram delivery
+  remains unverified (no token); mock formatting tests
+  cover the messages.
+- Add a small real-data frontend section (latest Alpha
+  tokens, active airdrops, active Prime Sales, or
+  "None recorded yet") — no dashboard, no fake data.
+- Add `docs/ALPHA_INTELLIGENCE.md`,
+  `docs/AIRDROP_INTELLIGENCE.md`, and
+  `docs/PRIME_SALE_INTELLIGENCE.md`, and update API,
+  Architecture, Database, Status, and Development Log
+  documentation.
+- No Phase 5 work (trading competitions or volume
+  tracking) was implemented in this phase.
+
 ## Phase 3 — Announcement Monitor
 
 - Add Binance website CMS announcement collector (GET

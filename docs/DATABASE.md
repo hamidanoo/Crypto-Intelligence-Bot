@@ -41,9 +41,47 @@
   - `collection_runs` — source, started/completed at (UTC),
     status, found/created/skipped counts, error message.
     Indexed on source, started time, and status.
-- Later phases add the Alpha, airdrop, Prime Sale, competition,
-  volume snapshot, market, futures, news, notification,
-  template, and job tables, each with its own migration and
-  the same UTC and uniqueness rules.
+- Phase 4 tables (migration `0005`):
+  - `alpha_tokens` — one record per ALPHA announcement
+    (unique announcement_id): token name/symbol,
+    contract address, network, trading status/pairs,
+    announcement URL and timestamp, JSON metadata,
+    data source, verification status, Decimal price,
+    24h change and volume, market data source, updated
+    time, and market data status. Indexed on
+    announcement, symbol, contract, and network.
+  - `alpha_token_updates` — creation and price-change
+    records per token, with a JSON changes object.
+  - `airdrop_campaigns` — one record per AIRDROP
+    announcement (unique announcement_id): campaign
+    name, token name/symbol, description, eligibility
+    summary, start/end/claim dates, distribution
+    schedule, reward info, supported networks (JSON),
+    official URL, and status (UPCOMING/ACTIVE/ENDED/
+    CLAIMING/DISTRIBUTION_COMPLETED/CANCELLED/UNKNOWN).
+    Indexed on announcement, symbol, and status.
+  - `airdrop_eligibility` — one row per recognisable
+    eligibility hint, with requirement type,
+    description, source text, and
+    `is_confirmed_details` (False for title hints).
+  - `prime_sales` — one record per PRIME_SALE
+    announcement (unique announcement_id): token
+    name/symbol, description, subscription start/end,
+    distribution time, trading availability, Decimal
+    subscription price and min/max commitment,
+    eligible assets (JSON), allocation methodology,
+    reward info, official URL, and status.
+  - `prime_sale_allocation_rules` — one rule per sale
+    (unique sale_id): formula type (unknown unless
+    officially confirmed), description, Decimal total
+    token allocation and sale price.
+  - `campaign_notifications` — duplicate prevention:
+    unique on (entity_type, entity_id,
+    notification_type), with status, sent time, and
+    error message.
+- Later phases add the competition, volume snapshot,
+  market, futures, news, notification, template, and
+  job tables, each with its own migration and the
+  same UTC and uniqueness rules.
 - Backups and restore procedures are documented in
   `docs/BACKUP_RESTORE.md`.

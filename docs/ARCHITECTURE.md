@@ -39,7 +39,17 @@ Nginx (reverse proxy: / -> frontend, /api/ -> backend)
   announcements. Announcement collection itself lives in
   `backend/app/announcements/` (client, classifier, service,
   notifications, scheduler job); the API layer is
-  `backend/app/api/announcements.py`. APScheduler remains
+  `backend/app/api/announcements.py`. Phase 4 adds three
+  processing jobs on the same scheduler, each every 10
+  minutes, max_instances=1: `alpha_processing`,
+  `airdrop_processing`, and `prime_sale_processing`.
+  They process announcements the collector already
+  stored; they do not re-fetch the CMS feed. Phase 4
+  logic lives in `backend/app/intelligence/` (parsing,
+  allocation, processing, notifications, scheduler
+  jobs); the API layer is
+  `backend/app/api/intelligence.py`, and bot commands
+  live in `backend/app/bot.py`. APScheduler remains
   single-instance only; distributed coordination is deferred.
 
 ## Later phases
