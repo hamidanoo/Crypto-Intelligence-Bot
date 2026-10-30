@@ -1,9 +1,29 @@
 # Project Status
 
-- **Current phase:** Phase 1 — Project Foundation
-- **Current branch:** `phase-01-foundation`
-- **Latest commit:** `774e54249f9aa2e32be22b420a969d8cb66f67e9` — "Set up Phase 1 project foundation", on `phase-01-foundation`, verified by reading the branch back after the push.
+- **Current phase:** Phase 2 — Binance Market Integration
+- **Current branch:** `phase-02-binance-integration`
+- **Latest commit:** To be filled in after the Phase 2 push is verified.
 - **Merged into main:** No. Merging requires explicit approval.
+
+## Completed features (Phase 2)
+
+- Binance Spot API client: price, 24-hour ticker, and klines
+  with volume, trade count, and UTC timestamps.
+- Binance Futures API client: funding rate, premium index
+  (mark price and next funding time), and open interest.
+- Retry handling for network errors, HTTP 429, and HTTP 5xx
+  with exponential backoff; other Binance errors are surfaced
+  unchanged, including restricted-location responses.
+- Persistence: `market_snapshots` and `futures_snapshots`
+  tables with migration `0002`, and collection endpoints
+  `POST /binance/collect/market` and `/binance/collect/futures`.
+- API connection monitoring: `GET /binance/status` reports
+  Spot and Futures separately with latency and error.
+- Tracked symbols by default: BTCUSDT, ETHUSDT, BNBUSDT,
+  SOLUSDT, XRPUSDT, configurable via `TRACKED_SYMBOLS`.
+- Base URLs configurable via environment: Spot defaults to
+  api.binance.com, with data-api.binance.vision documented as
+  the alternative where the main endpoint is restricted.
 
 ## Completed features (Phase 1)
 
@@ -26,38 +46,47 @@
 
 ## Pending features
 
-- Phase 2 — Binance Market Integration, and all later phases
-  (3–10). No work from those phases has been started.
+- Phase 3 — Announcement Monitor, and all later phases
+  (4–10). No work from those phases has been started.
 
 ## Known issues and limitations
 
 - Docker is not available in the development environment used for
-  Phase 1 testing, so Docker services were not started here. The
-  Compose file was validated as YAML and the service definitions
-  were reviewed, but a full `docker compose up` run is still
-  required on a machine with Docker before production use.
-- Database and Redis were not available during Phase 1 backend
-  testing, so `/health/ready` correctly reported them as
-  unavailable in that environment, while `/health` passed.
-  Migration execution against a live PostgreSQL instance is
-  therefore still to be verified in Phase 2 setup testing.
-- No market, announcement, competition, volume, news, or dashboard
-  features exist yet. Those are later phases.
+  testing, so Docker services were not started here. A full
+  `docker compose up` run is still required on a machine with
+  Docker before production use.
+- Live PostgreSQL and Redis were not available during testing,
+  so migration `0002` execution against live PostgreSQL and
+  collection to a live database are still to be verified on a
+  Docker host or VPS. Persistence was verified with an
+  in-memory SQLite database in tests.
+- Binance Futures endpoints are blocked from this test
+  environment with a restricted-location response
+  (api.binance.com and fapi.binance.com). Spot data was tested
+  live via data-api.binance.vision. Futures code is complete,
+  but live Futures testing must happen on a VPS in an allowed
+  location. The status endpoint reports this honestly as
+  Futures unavailable, rather than fabricating data.
+- No announcement, Alpha, airdrop, Prime Sale, competition,
+  volume, news, or dashboard features exist yet. Those are
+  later phases.
 
 ## Latest test results
 
-- Backend tests: `pytest` from `backend/` — 2 passed.
-- Backend startup: `uvicorn` started; `GET /health` returned
-  `ok`; `GET /health/ready` returned `degraded` with database
-  and Redis unavailable, as expected without those services.
-- Alembic: `alembic history` shows migration `0001` as head.
-- Frontend: `npm install` succeeded; `npm run build` compiled
-  successfully on Next.js 14.2.35; `npm start` served the home page.
-- Compose: YAML parsed successfully; services are backend, bot,
-  frontend, nginx, postgres, and redis.
+- Backend tests: `pytest` from `backend/` — 12 passed
+  (Phase 1 health tests plus Phase 2 client, API, and
+  persistence tests).
+- Live Spot API (via data-api.binance.vision): BTCUSDT price,
+  ETHUSDT 24-hour ticker, and BTCUSDT 1-hour klines all
+  returned real data through the new client and API routes.
+- Live Futures API: funding rate, open interest, and premium
+  index all returned the restricted-location error from this
+  environment, which the client surfaces as a 502 with the
+  upstream message, and `/binance/status` reports as degraded.
+- Alembic: `alembic history` shows migration `0002` as head.
 - Full details are in `docs/DEVELOPMENT_LOG.md`.
 
 ## Next phase awaiting approval
 
-Phase 2 — Binance Market Integration. Do not start it without
-explicit approval, for example: "Approved. Start Phase 2."
+Phase 3 — Announcement Monitor. Do not start it without
+explicit approval, for example: "Approved. Start Phase 3."

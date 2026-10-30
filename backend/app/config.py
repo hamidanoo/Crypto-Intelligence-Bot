@@ -36,6 +36,17 @@ class Settings(BaseSettings):
 
     binance_spot_base_url: str = "https://api.binance.com"
     binance_futures_base_url: str = "https://fapi.binance.com"
+    # Public market data only; no API key is required for the Phase 2
+    # endpoints. Where api.binance.com is restricted by location, the
+    # spot base URL can be pointed at https://data-api.binance.vision
+    # instead, without changing any client code.
+    binance_request_timeout_seconds: float = 10.0
+    binance_max_retries: int = 3
+    tracked_symbols: str = "BTCUSDT,ETHUSDT,BNBUSDT,SOLUSDT,XRPUSDT"
+
+    @property
+    def tracked_symbol_list(self) -> list[str]:
+        return [s.strip().upper() for s in self.tracked_symbols.split(",") if s.strip()]
 
     @property
     def cors_origin_list(self) -> list[str]:

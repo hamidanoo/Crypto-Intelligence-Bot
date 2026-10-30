@@ -84,3 +84,63 @@ documentation as specified for Phase 1.
 ### Important architectural changes
 
 None in Phase 1 beyond the foundation described above.
+
+## Phase 2 — Binance Market Integration
+
+### Repository inspection
+
+Phase 2 branched from `phase-01-foundation` at
+`fcc147372f1a16b54fbfe11173e12958bd364c91`, so all Phase 1
+work is inherited. No Phase 1 file was removed, and no later
+phase work was started.
+
+### Implementation decisions
+
+- One shared `BinanceClient` for Spot and Futures, with
+  separate base URLs, so the Spot endpoint can be pointed at
+  data-api.binance.vision without changing client code.
+- Public endpoints only, no API key. Collection endpoints
+  persist one snapshot per symbol and commit once per batch.
+- API routes use dependency injection for the client, so
+  route tests can use a fake client while client tests use
+  mock transports and live Spot data separately.
+- Tracked symbols default to BTCUSDT, ETHUSDT, BNBUSDT,
+  SOLUSDT, and XRPUSDT, configurable via `TRACKED_SYMBOLS`.
+
+### Technical issues
+
+- Binance main endpoints are restricted from this test
+  environment: api.binance.com and fapi.binance.com return
+  HTTP 451 with "Service unavailable from a restricted
+  location". Spot data works via data-api.binance.vision.
+  Futures live testing is therefore deferred to a VPS in an
+  allowed location, and the status endpoint reports Futures
+  as unavailable here rather than fabricating data.
+- httpx proxy handling in this environment: ambient proxy
+  variables include NO_PROXY entries such as "[::1]" that
+  httpx fails to parse, and disabling trust_env also
+  disabled the egress CA bundle. The client now passes an
+  explicit proxy URL and an explicit SSL context loaded
+  from the environment CA bundle when present, with
+  trust_env disabled. Test transports bypass proxy and TLS
+  entirely, so mock tests are unaffected.
+- A test failure for an invalid symbol was caused by the
+  fake client not validating symbols. The fake now validates
+  like the real client, and the test passes.
+
+### Testing performed
+
+- Backend tests: `pytest` from `backend/` — 12 passed,
+  covering health, client kline parsing, Binance error
+  handling (including the 451 restricted-location case),
+  SQLite persistence, and API routes with a fake client.
+- Live Spot test via data-api.binance.vision: BTCUSDT price,
+  ETHUSDT ticker, and BTCUSDT 1-hour klines returned real
+  data through both the client and the running API.
+- Live Futures test: funding rate, open interest, and
+  premium index all returned the restricted-location error,
+  which the API reports as HTTP 502 and the status endpoint
+  reports as degraded with Spot ok and Futures unavailable.
+- Alembic: `alembic history` shows migration `0002` as head.
+  Live PostgreSQL execution remains an open item, as in
+  Phase 1, because no PostgreSQL instance is available here.

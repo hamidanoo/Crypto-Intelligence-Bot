@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -80,6 +80,50 @@ class ApiIntegration(Base, TimestampMixin):
     rate_limit_per_minute: Mapped[int | None] = mapped_column(Integer)
 
     __table_args__ = (UniqueConstraint("provider", name="uq_api_integrations_provider"),)
+
+
+class MarketSnapshot(Base):
+    """A point-in-time Spot market snapshot, as returned by Binance.
+
+    ``collected_at`` is when this system recorded the snapshot, in UTC.
+    The exchange's own open/close times are stored separately where
+    the endpoint provides them, so exchange time is never confused
+    with collection time.
+    """
+
+    __tablename__ = "market_snapshots"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    symbol: Mapped[str] = mapped_column(String(32), index=True, nullable=False)
+    source: Mapped[str] = mapped_column(String(64), default="binance_spot", nullable=False)
+    price: Mapped[float] = mapped_column(Float, nullable=False)
+    price_change_24h: Mapped[float | None] = mapped_column(Float)
+    price_change_percent_24h: Mapped[float | None] = mapped_column(Float)
+    high_24h: Mapped[float | None] = mapped_column(Float)
+    low_24h: Mapped[float | None] = mapped_column(Float)
+    volume_24h: Mapped[float | None] = mapped_column(Float)
+    quote_volume_24h: Mapped[float | None] = mapped_column(Float)
+    collected_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, index=True, nullable=False
+    )
+
+
+class FuturesSnapshot(Base):
+    """A point-in-time Futures snapshot: funding rate, next funding
+    time, mark price, and open interest, as returned by Binance."""
+
+    __tablename__ = "futures_snapshots"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    symbol: Mapped[str] = mapped_column(String(32), index=True, nullable=False)
+    source: Mapped[str] = mapped_column(String(64), default="binance_futures", nullable=False)
+    funding_rate: Mapped[float | None] = mapped_column(Float)
+    next_funding_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    mark_price: Mapped[float | None] = mapped_column(Float)
+    open_interest: Mapped[float | None] = mapped_column(Float)
+    collected_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, index=True, nullable=False
+    )
 
 
 class AuditLog(Base, TimestampMixin):

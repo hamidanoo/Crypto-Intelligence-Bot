@@ -16,6 +16,13 @@
     optional link to the acting admin user.
 - Indexes: unique indexes on usernames, emails, chat ids, setting
   keys, and providers; an index on audit log actions.
+- Phase 2 tables (migration `0002`):
+  - `market_snapshots` — Spot snapshot per symbol: price, 24h
+    change, high, low, volume, quote volume, source, and UTC
+    `collected_at`, indexed by symbol and collected_at.
+  - `futures_snapshots` — Futures snapshot per symbol: funding
+    rate, next funding time, mark price, open interest, source,
+    and UTC `collected_at`, indexed by symbol and collected_at.
 - Later phases add the Alpha, airdrop, Prime Sale, competition,
   volume snapshot, market, futures, news, announcement,
   notification, template, and job tables, each with its own
