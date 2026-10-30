@@ -33,6 +33,14 @@ Nginx (reverse proxy: / -> frontend, /api/ -> backend)
   directly to the database or to Telegram.
 - Background work: jobs are registered in `scheduler.py` with
   explicit ids, so they are idempotent and restart-safe by design.
+  Phase 3 adds one job, `announcement_collection`, every 5
+  minutes, max_instances=1, collecting from due enabled
+  announcement sources and then notifying about pending
+  announcements. Announcement collection itself lives in
+  `backend/app/announcements/` (client, classifier, service,
+  notifications, scheduler job); the API layer is
+  `backend/app/api/announcements.py`. APScheduler remains
+  single-instance only; distributed coordination is deferred.
 
 ## Later phases
 

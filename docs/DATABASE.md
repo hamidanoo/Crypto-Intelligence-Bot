@@ -26,9 +26,24 @@
   - `futures_snapshots` — Futures snapshot per symbol: funding
     rate, next funding time, mark price, open interest, source,
     and UTC `collected_at`, indexed by symbol and collected_at.
+- Phase 3 tables (migration `0004`):
+  - `announcement_sources` — name (unique), source_type,
+    base_url, enabled, polling_interval_seconds, JSON
+    configuration, last success/error times and message.
+  - `announcements` — source, external id, code, title, slug,
+    canonical URL (unique), category + confidence, summary,
+    original content, published/collected at (UTC), content
+    hash, verification status, JSON metadata, notification
+    status, notified at, notification attempts and error.
+    Unique on `(source_id, external_id)` and on canonical
+    URL; indexed on source, category, published/collected
+    time, content hash, and notification status.
+  - `collection_runs` — source, started/completed at (UTC),
+    status, found/created/skipped counts, error message.
+    Indexed on source, started time, and status.
 - Later phases add the Alpha, airdrop, Prime Sale, competition,
-  volume snapshot, market, futures, news, announcement,
-  notification, template, and job tables, each with its own
-  migration and the same UTC and uniqueness rules.
+  volume snapshot, market, futures, news, notification,
+  template, and job tables, each with its own migration and
+  the same UTC and uniqueness rules.
 - Backups and restore procedures are documented in
   `docs/BACKUP_RESTORE.md`.

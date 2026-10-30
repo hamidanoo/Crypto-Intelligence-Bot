@@ -1,5 +1,38 @@
 # Changelog
 
+## Phase 3 — Announcement Monitor
+
+- Add Binance website CMS announcement collector (GET
+  article list, catalogs for listings, news, activities,
+  delistings, maintenance, API updates, and airdrops),
+  with the undocumented-endpoint limitation documented,
+  not hidden.
+- Add announcement models and migration 0004:
+  announcement sources, announcements, and collection runs.
+- Add category classification with high/medium/low
+  confidence for 12 categories, extensible for later phases.
+- Add duplicate detection by (source, external id) and
+  canonical URL, with in-place updates on changed titles.
+- Add scheduled collection (APScheduler, every 5 minutes,
+  max_instances=1, idempotent registration) and manual
+  collection API endpoints.
+- Add announcement API endpoints with pagination, category,
+  source, date, search, and sort filters, plus source
+  configuration (PATCH) and collection-run listing.
+- Add Telegram notification foundation: HTML messages,
+  send-once marking, failure recording with up to 3
+  attempts, and category enable/disable configuration.
+  Live delivery remains unverified (no token); mock tests
+  cover formatting, duplicates, and failures.
+- Add a small "Latest announcements" section to the
+  existing frontend home page, using real collected data.
+- Add `docs/ANNOUNCEMENT_MONITOR.md` and update API,
+  Architecture, Database, Status, and Development Log
+  documentation.
+- No Alpha, Airdrop, Prime Sale, or Competition modules
+  were implemented in this phase; they reuse this
+  foundation in later phases.
+
 ## Phase 1 + Phase 2 Bug-Fix Pass
 
 - Start and stop the APScheduler scheduler from the API
@@ -25,8 +58,10 @@
 - Add Redis-backed caching with an in-memory fallback for
   price, ticker, and klines, and a 120/minute per-IP rate
   limit on Binance routes.
-- Add CI (GitHub Actions), ruff and black configuration,
-  a local check script, and 10 new tests for the fixes.
+- Add ruff and black configuration, a local check script,
+  and 10 new tests for the fixes. (A GitHub Actions
+  workflow file was prepared locally but could not be
+  pushed via the GitHub integration; see PROJECT_STATUS.)
 - Document issue classification in
   `docs/ISSUE_FIX_PLAN.md` and external verification steps
   in `docs/EXTERNAL_VERIFICATION.md`. Docker, live

@@ -245,3 +245,91 @@ Phase 3+ features were added.
   Docker Compose run, live PostgreSQL migrations,
   Redis-backed cache, live Telegram polling, and live
   Binance Futures.
+
+## Phase 3 — Announcement Monitor
+
+### Starting point verification
+
+Branch `phase-03-announcement-monitor` was created from
+`fix-phase1-phase2-issues` at
+`b77f6f74323f8a941e18998261963c1f633ab656`, verified
+remotely (list_commits head matched the expected hash)
+before creation. It was not created from main, and no
+previous branch was merged or deleted.
+
+### Source investigation
+
+- Binance support HTML page returned HTTP 202
+  (challenge page) and carries no structured data.
+- CMS POST to the same path timed out in this
+  environment; CMS GET succeeded with HTTP 200.
+- CMS GET
+  `/bapi/composite/v1/public/cms/article/list/query?type=1&pageNo=1&pageSize=5`
+  returned code `000000` with 7 catalogs (48, 49, 93,
+  161, 157, 51, 128), 5 articles each, each with id,
+  code, title, and releaseDate in milliseconds, and no
+  duplicates across catalogs.
+- Catalog-specific endpoint
+  `/article/catalog/list/query` returned articles without
+  releaseDate, so the list endpoint is used as primary.
+- Article detail endpoint tried returned code `000002`
+  "illegal parameter", so Phase 3 does not fetch article
+  bodies; summary and original_content remain null.
+- Canonical URL pattern (slug + code) was verified live
+  for one article (HTTP 202 with the correct URL).
+- api.binance.com / fapi.binance.com have no
+  announcement endpoint; they are market data only.
+
+### Implementation decisions
+
+- One scheduler job, not one job per source, with
+  per-source due checking, so polling intervals are
+  configurable without multiplying jobs or risking
+  overlaps (max_instances=1).
+- Deduplication by (source, external id) and canonical
+  URL, with in-place updates on title/category changes.
+- Category confidence is separate from source
+  verification: "official_website" means the record came
+  from binance.com, not that the category is confirmed.
+- Telegram messages use HTML with escaped titles, to
+  avoid Markdown escaping failures on special characters.
+- Admin authentication is NOT faked in Phase 3: manual
+  collection and source configuration endpoints are
+  documented as ungated until Phase 8, and must be
+  exposed only behind deployment access controls.
+- Frontend scope is limited to a latest-announcements
+  section on the home page; no dashboard was built.
+
+### Technical issues
+
+- Read endpoints initially returned 500 on database
+  failure, because the failure occurred inside the query,
+  not in the endpoint wrapper for some paths. All
+  announcement read endpoints now catch SQLAlchemyError
+  and return 503, with a test using a failing query
+  object (a dependency that raises before yielding
+  would bypass the endpoint handler entirely, which is
+  why the test uses a failing session instead).
+- APScheduler shutdown timing (from the fix pass) and
+  the closed-loop restart handling were reused unchanged;
+  scheduler registration tests confirm idempotence.
+- A stale frontend server must be restarted after a
+  config change (observed in the fix pass); the Phase 3
+  frontend build was verified with a fresh build.
+
+### Testing performed
+
+- Backend tests: `pytest` from `backend/` — 31 passed
+  (22 Phase 1+2, 9 Phase 3).
+- Alembic against SQLite: upgrade to `0004` succeeded,
+  current reports `0004` (head), 10 tables present.
+- Live CMS collection via the running API with a SQLite
+  database: first collect found 140, created 140;
+  second collect created 0, skipped 140 duplicates;
+  categories, sources, and collection runs endpoints
+  returned real data.
+- Frontend: `npm run build` succeeded.
+- Not tested live: PostgreSQL migration `0004`, Docker
+  Compose run, Telegram delivery (mock only), and a
+  production-environment collection run. See
+  `docs/ANNOUNCEMENT_MONITOR.md`.

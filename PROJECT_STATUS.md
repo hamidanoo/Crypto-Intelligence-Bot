@@ -1,146 +1,133 @@
 # Project Status
 
-- **Current phase:** Phase 1 + Phase 2 bug-fix pass (Phase 3 NOT approved)
-- **Current branch:** `fix-phase1-phase2-issues`, created from `phase-02-binance-integration`
-- **Latest commit:** `b546e97f99f1619111c24190b27e0141d98f825d` — "Fix Phase 1 and Phase 2 issues: scheduler, migrations, proxy, secrets, CORS, funding order, retries, Decimal, cache and rate limits", on `fix-phase1-phase2-issues`, verified by reading the branch back after the push. A following status-update commit will head the branch after this file is pushed (see the fix report in chat).
+- **Current phase:** Phase 3 — Announcement Monitor
+- **Current branch:** `phase-03-announcement-monitor`, created from `fix-phase1-phase2-issues` at `b77f6f74323f8a941e18998261963c1f633ab656` (verified remotely before creation)
+- **Latest commit:** `4e7882a1d3e208ab9d72d07b33a21cf683da926e` — "Add announcement API endpoints and status view", on `phase-03-announcement-monitor`, verified by reading the branch back after the push. A following status-update commit will head the branch after this file is pushed (see the Phase 3 report in chat). Earlier Phase 3 commits: `92378523f9ca2aa7b3a45779e5a7cee146c2ba56` (models), `dfd8eb39c999b90ca7392320eb5bf0111a849f6c` (collector).
 - **Merged into main:** No. Merging requires explicit approval.
+
+## Completed features (Phase 3)
+
+- Binance announcement collection from the official Binance
+  website CMS feed (GET
+  `/bapi/composite/v1/public/cms/article/list/query`,
+  type=1), with catalogs for listings, news, activities,
+  delistings, maintenance, API updates, and airdrops.
+  The endpoint is undocumented (not a documented public
+  API); that limitation is documented in
+  `docs/ANNOUNCEMENT_MONITOR.md`, not hidden.
+- Reusable collection engine: scheduled + manual collection,
+  source-specific client, parsing and normalization to UTC,
+  category classification with confidence, duplicate
+  detection by (source, external id) and canonical URL,
+  database persistence, collection-run tracking, retries,
+  error logging, and restart recovery via re-registration
+  and next-poll recovery.
+- Database models and migration `0004`:
+  `announcement_sources`, `announcements`,
+  `collection_runs`, with uniqueness constraints and
+  indexes, UTC timestamps, and Numeric-free text/JSON
+  fields as documented in `docs/DATABASE.md`.
+- Category classification for GENERAL, ALPHA, AIRDROP,
+  PRIME_SALE, TRADING_COMPETITION, SPOT_LISTING,
+  FUTURES_LISTING, DELISTING, DEPOSIT_WITHDRAWAL,
+  NETWORK_MAINTENANCE, TOKEN_MIGRATION, and OTHER, with
+  high/medium/low confidence. Uncertain announcements are
+  OTHER/low, never a confirmed category they do not match.
+- FastAPI announcement endpoints: list with pagination,
+  category/source/date/search/sort filters, single
+  announcement, categories with counts, sources,
+  collection runs, manual collection (all or one source),
+  and source configuration (PATCH). Database failures
+  return 503.
+- Scheduler: one job, `announcement_collection`, every 5
+  minutes, max_instances=1, idempotent registration,
+  collecting due enabled sources and then notifying.
+  APScheduler remains single-instance only (documented).
+- Telegram notification foundation: HTML messages with
+  title, category, published time, source, and canonical
+  link; only pending announcements are sent, successful
+  sends are marked sent with a timestamp, failures are
+  recorded and retried up to 3 attempts, categories can
+  be enabled/disabled via
+  `ANNOUNCEMENT_NOTIFICATION_CATEGORIES`. Live delivery
+  was NOT tested (no token); mock sender tests cover
+  formatting, duplicate prevention, and failure handling.
+- Frontend: a small "Latest announcements" section on the
+  existing home page, showing real collected data or
+  "No announcements collected yet" — not a dashboard
+  (Phase 8).
 
 ## Completed features (Phase 2, plus fixes)
 
-- Binance Spot API client: price, 24-hour ticker, and klines
-  with volume, trade count, and UTC timestamps.
-- Binance Futures API client: funding rate, premium index
-  (mark price and next funding time), and open interest.
-  Funding rate now picks the row with the latest funding time,
-  instead of assuming the last row is latest.
-- Retry handling for network errors, HTTP 429, and HTTP 5xx
-  with exponential backoff; a non-numeric Retry-After header
-  no longer crashes, no sleep is wasted on the final attempt,
-  and a final 429/5xx now reports its real status and message.
-- Persistence: `market_snapshots` and `futures_snapshots`
-  tables with migrations `0002` and `0003`. Migration `0003`
-  stores financial values as Numeric (Decimal), not Float.
-  Collection endpoints are `POST /binance/collect/market` and
-  `/binance/collect/futures`, now with a JSON body
-  (`{"symbols": [...]}`), a 20-symbol limit, and a 503 (not a
-  raw 500) when the database is unavailable.
-- API connection monitoring: `GET /binance/status` now pings
-  Spot and Futures concurrently and reports each separately
-  with latency and error.
-- Caching and request controls: price, ticker, and klines
-  responses are cached (Redis when reachable, in-memory
-  fallback otherwise; price responses report `"cached"`),
-  and Binance routes are rate-limited to 120 requests per
-  minute per client IP (single-instance limit).
-- Tracked symbols by default: BTCUSDT, ETHUSDT, BNBUSDT,
-  SOLUSDT, XRPUSDT, configurable via `TRACKED_SYMBOLS`.
-- Base URLs configurable via environment: Spot defaults to
-  api.binance.com, with data-api.binance.vision documented as
-  the alternative where the main endpoint is restricted.
+- Binance Spot and Futures market data, retry handling,
+  Decimal snapshot storage (migration `0003`), concurrent
+  status checks, caching and rate limiting, and the
+  `/binance/*` API routes. See the previous status for
+  full details; all Phase 2 functionality is preserved
+  in Phase 3.
 
 ## Completed features (Phase 1, plus fixes)
 
-- Backend project structure with FastAPI, configuration management,
-  logging, and SQLAlchemy database setup.
-- Initial database models: AdminUser, TelegramGroup, SystemSetting,
-  ApiIntegration, AuditLog.
-- Alembic configuration and migrations `0001`, `0002`, `0003`.
-  The backend Docker entrypoint now runs `alembic upgrade head`
-  before starting the API, so a fresh deployment never starts
-  with missing tables. Migration execution was verified
-  against SQLite (head `0003`, all tables present); live
-  PostgreSQL execution is still unverified (see below).
-- FastAPI health endpoint (`/health`) and readiness endpoint
-  (`/health/ready`) reporting database and Redis status honestly.
-- Telegram bot connection structure with `/start`, `/help`, and
-  `/status` handlers; polling starts only when a bot token is set.
-- APScheduler job registry with no jobs registered yet, now
-  actually started and stopped by the API lifespan, including
-  handling a previously closed event loop on restart.
-- Frontend: the page now uses the `/api` proxy by default
-  (Next.js rewrites in development / direct Next.js serving,
-  Nginx `/api/` proxy in production behind Nginx), instead of
-  calling the backend directly at localhost:8000. Verified
-  live: `GET /api/health` through the frontend returned the
-  backend health JSON.
-- Production secret validation: the app fails to start when
-  `ENVIRONMENT=production` and `SECRET_KEY` is still the
-  default placeholder.
-- CORS: methods are now an explicit list (GET, POST, PUT,
-  PATCH, DELETE, OPTIONS) and headers are limited to
-  Authorization, Content-Type, and Accept, instead of `*`.
-- Docker and Docker Compose configuration for PostgreSQL, Redis,
-  backend, bot, frontend, and Nginx.
-- Environment template (`.env.example`) with placeholders only.
-- CI: linting (ruff) and formatting (black, ruff format)
-  configuration live in `backend/pyproject.toml`;
-  `scripts/check.sh` runs lint, format, tests, and the
-  frontend build locally. A GitHub Actions workflow file
-  (`.github/workflows/ci.yml`) was prepared in the local
-  workspace but could NOT be pushed via the current GitHub
-  integration: GitHub returned 403 "Resource not accessible
-  by integration" for that file alone, while all other files
-  pushed successfully. That file is therefore not on the
-  branch yet; it can be added manually from the local copy,
-  or after the GitHub App is granted workflow write access.
-- Project documentation set, plus `docs/ISSUE_FIX_PLAN.md`
-  (issue classification) and `docs/EXTERNAL_VERIFICATION.md`
-  (exact commands for the checks that still need an external
-  environment).
+- FastAPI backend, health/readiness, Telegram bot structure,
+  APScheduler registry, Next.js frontend, Docker Compose,
+  and documentation. See the previous status for full
+  details; all Phase 1 functionality is preserved.
 
 ## Pending features
 
-- Phase 3 — Announcement Monitor, and all later phases
-  (4–10). No work from those phases has been started, and
-  Phase 3 is NOT approved in this fix pass.
+- Phase 4 — Alpha / Airdrop / Prime Sale, and all later
+  phases (5–10). No work from those phases has been started,
+  and Phase 4 is NOT approved in this phase.
 
 ## Known issues and limitations (still open, not faked)
 
-- Docker is not available in the development environment used for
-  testing, so `docker compose up` was not run here. A full run
-  is still required on a machine with Docker before production use.
-- Live PostgreSQL and Redis were not available during testing,
-  so migration execution against live PostgreSQL, collection to
-  a live database, and Redis-backed caching are still to be
-  verified on a Docker host or VPS. SQLite migration execution
-  and in-memory cache fallback were verified; the Redis path
-  was not.
-- Live Telegram bot polling was not tested (no token available).
-- Binance Futures endpoints are blocked from this test
-  environment with a restricted-location response
-  (api.binance.com and fapi.binance.com). Spot data was tested
-  live via data-api.binance.vision. Futures code is complete,
-  but live Futures testing must happen on a VPS in an allowed
-  location. The status endpoint reports this honestly as
-  Futures unavailable, rather than fabricating data.
-- No announcement, Alpha, airdrop, Prime Sale, competition,
-  volume, news, or dashboard features exist yet. Those are
-  later phases. shadcn/ui components, dashboard auth, and
-  Nginx TLS are documented for Phase 8 / Phase 10, not added here.
+- The Binance CMS announcement endpoint is undocumented
+  and may change or be blocked; failures are recorded as
+  failed runs, never as fabricated data.
+- Article body/detail is not fetched in Phase 3 (detail
+  endpoint returned an error in investigation); summary
+  and original_content are null.
+- Classification is heuristic (see ANNOUNCEMENT_MONITOR.md).
+- Live PostgreSQL migration `0004`, live Docker Compose
+  run, live Telegram delivery, and a production-environment
+  collection run are still unverified (SQLite migration,
+  mock Telegram, and live CMS collection from this
+  environment were verified — see below).
+- Admin authentication for manual collection and source
+  configuration is a Phase 8 feature; in Phase 3 those
+  endpoints are not admin-gated and must only be exposed
+  behind the deployment's own access controls.
+- GitHub Actions workflow file `.github/workflows/ci.yml`
+  remains local-only (GitHub App 403 for workflow files,
+  documented in the fix pass); local checks run via
+  `scripts/check.sh`.
 
 ## Latest test results
 
-- Backend tests: `pytest` from `backend/` — 22 passed
-  (12 original Phase 1 + Phase 2 tests plus 10 new fix tests,
-  covering production secret validation, scheduler lifecycle
-  and lifespan, funding-rate ordering, retry after 429 with a
-  non-numeric Retry-After, Decimal snapshot storage, cache
-  fallback, rate limiting, and the collect JSON body).
+- Backend tests: `pytest` from `backend/` — 31 passed
+  (22 Phase 1+2 tests, plus 9 Phase 3 tests covering
+  source parsing, normalization, classification, duplicate
+  detection, persistence, uniqueness, scheduler
+  registration, retries, failure handling, manual
+  collection endpoint, pagination/filtering, Telegram
+  formatting, duplicate notification prevention,
+  delivery failure handling, and database-failure 503).
 - Lint/format: `ruff check`, `ruff format --check`, and
-  `black --check` all pass on `backend/app` and `backend/tests`.
-- Alembic: `alembic upgrade head` against SQLite succeeded,
-  `alembic current` reports `0003` (head), all 7 tables present.
-- Live Spot API (via data-api.binance.vision): BTCUSDT price
-  returned 77799.9 at test time, with `"cached": false` on the
-  first call and `"cached": true` on the immediate second call.
-  `/binance/status` reported Spot ok and Futures unavailable
-  with the restricted-location message (degraded overall).
-- Frontend: `npm run build` succeeded, and a fresh
-  `npm start` server proxied `GET /api/health` to the backend
-  with HTTP 200 and the backend health JSON.
+  `black --check` all pass.
+- Alembic: `alembic upgrade head` against SQLite
+  succeeded, `alembic current` reports `0004` (head),
+  all 10 tables present.
+- Live CMS collection via the running API (SQLite DB):
+  first collect found 140 announcements (7 catalogs x
+  20) and created 140; second collect created 0 and
+  skipped 140 duplicates. Categories, sources, and
+  collection runs endpoints all returned real data.
+- Frontend: `npm run build` succeeded with the new
+  announcements section.
 - Full details are in `docs/DEVELOPMENT_LOG.md`.
 
 ## Next phase awaiting approval
 
-Phase 3 — Announcement Monitor. Do not start it without
-explicit approval, for example: "Approved. Start Phase 3."
+Phase 4 — Alpha / Airdrop / Prime Sale. Do not start it
+without explicit approval, for example: "Approved. Start
+Phase 4."

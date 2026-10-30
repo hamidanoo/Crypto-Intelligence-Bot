@@ -78,6 +78,24 @@ In production behind Nginx, the frontend calls these routes
 through `/api/`; in development, Next.js rewrites `/api/`
 to the backend.
 
+## Phase 3 endpoints
+
+All announcement endpoints use real database data; no
+announcement is fabricated. Database failures return HTTP
+503. Admin authentication for manual collection and source
+configuration is a Phase 8 feature; in Phase 3 those
+endpoints are not admin-gated and must only be exposed
+behind the deployment's own access controls.
+
+- `GET /announcements?page=1&page_size=20&category=&source_id=&search=&published_from=&published_to=&sort=published_at_desc` — paginated list. Sort values: `published_at_desc` (default), `published_at_asc`, `collected_at_desc`. Response: `{total, page, page_size, items: [{id, source_id, source_name, external_id, code, title, slug, canonical_url, category, category_confidence, summary, published_at, collected_at, content_hash, verification_status, metadata, notification_status, notified_at, notification_attempts}]}`
+- `GET /announcements/{id}` — one announcement; 404 if missing.
+- `GET /announcements/categories` — `{categories: [...all categories...], counts: {category: count}}` from the database.
+- `GET /announcements/sources` — `{sources: [{id, name, source_type, base_url, enabled, polling_interval_seconds, configuration, last_success_at, last_error_at, last_error_message, created_at, updated_at}]}`
+- `GET /announcements/collection-runs?page=1&page_size=20&source_id=&status=` — paginated runs: `{total, page, page_size, items: [{id, source_id, started_at, completed_at, status, announcements_found, announcements_created, duplicates_skipped, error_message}]}`
+- `POST /announcements/collect` — body (optional): `{"source_id": 1, "page_size": 20}`. When source_id is omitted, all enabled sources are collected (the default Binance source is created if none exists). Response: `{runs: [...], announcements_created, duplicates_skipped}`; 502 if all runs failed, 400 if the requested source is disabled, 404 if it does not exist.
+- `POST /announcements/sources/{id}/collect` — same response shape for one source.
+- `PATCH /announcements/sources/{id}` — body (any subset): `{"enabled": true, "polling_interval_seconds": 300, "configuration": {...}}`. Polling interval must be 60–86400. Returns the updated source; 404 if missing.
+
 ## Later phases
 
 Later phases add versioned, authenticated API routes for Alpha,
