@@ -9,11 +9,16 @@ wallet signing.
 
 ## Current status
 
-Phase 7 — Market, Futures & News Intelligence is complete on
-branch `phase-07-market-futures-news`. See
+Phase 9 — Complete System Audit, Integration Testing &
+Security Hardening is complete on branch
+`phase-09-integration-security-audit`. See
 `PROJECT_STATUS.md` for the current phase, test
-results, and limitations. Nothing has been merged
-into `main`.
+results, and limitations, and
+`docs/PHASE_09_AUDIT_REPORT.md` for the audit findings,
+the production-readiness assessment, and what is still
+NOT VERIFIED (PostgreSQL, Redis, Docker, Nginx, HTTPS,
+live Telegram delivery, live Futures data, backup/restore).
+Nothing has been merged into `main`.
 
 ## Architecture
 

@@ -33,3 +33,21 @@
 - Report a suspected vulnerability by stopping the affected
   service, preserving logs, and notifying the administrator
   through a channel outside the platform.
+
+## Phase 9 audit notes
+
+- Paused scheduler jobs now restore correctly on restart
+  (a broken import had silently disabled restoration).
+- Login errors are generic for locked and unknown accounts
+  (dummy Argon2 verify for unknown users); password reset
+  revokes all sessions and invalidates sibling tokens.
+- Encryption key ids are stable version labels (`v1` by
+  default); unknown ids raise, legacy `current` rows still
+  decrypt. Losing the key is a credential-recovery risk.
+- Remaining risks, with evidence, are in
+  `docs/PHASE_09_AUDIT_REPORT.md`: rate limits key on the
+  direct client IP behind a proxy, the SSRF DNS-rebinding
+  window, lockout as per-account denial of service,
+  at-least-once Telegram delivery, and single-instance
+  scheduler assumption. HTTPS is still missing (Phase 10):
+  do not expose the panel publicly until TLS is added.

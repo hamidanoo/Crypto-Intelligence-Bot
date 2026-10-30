@@ -1,9 +1,57 @@
 # Project Status
 
-- **Current phase:** Phase 8 — Professional Admin Dashboard & Security
-- **Current branch:** `phase-08-admin-dashboard-security`, created from `phase-07-market-futures-news` at `49b208cdb09c4a653cca7e884d1d87020c0fcad9` (verified remotely before creation)
-- **Latest commit:** See the Phase 8 report for the verified branch head and each Phase 8 commit hash. This file follows the established pattern: a status file cannot contain its own commit hash, so the head commit is reported alongside this file, not inside it.
+- **Current phase:** Phase 9 — Complete System Audit, Integration Testing & Security Hardening
+- **Current branch:** `phase-09-integration-security-audit`, created from `phase-08-admin-dashboard-security` at `aa33ba8d7731f0b4bb3b9e459dd4c39dd08a6da8` (verified remotely before creation)
+- **Latest commit:** See the Phase 9 audit report for the verified branch head and each Phase 9 commit hash. This file follows the established pattern: a status file cannot contain its own commit hash, so the head commit is reported alongside this file, not inside it.
 - **Merged into main:** No. Merging requires explicit approval.
+
+## Completed features (Phase 9)
+
+- Full-system audit (backend, frontend, database, migrations
+  0001–0009, auth/RBAC, scheduler, Telegram, Binance clients,
+  all processing modules, configuration, Docker, Compose, Nginx,
+  docs, tests) with findings rated Critical/High/Medium/Low/
+  Informational in `docs/PHASE_09_AUDIT_REPORT.md`.
+- Confirmed problems fixed and tested, including: a broken
+  scheduler import that silently prevented paused-job restoration
+  on restart; market overview returning 500 instead of 503 on
+  database failure; scheduler trigger wrongly refusing
+  trigger-while-stopped; plus the earlier batch (CORS
+  `X-CSRF-Token`, production HSTS/docs lockdown, stable
+  encryption key-version ids, settings key validation, generic
+  lockout messages, password-reset session revocation and
+  sibling-token invalidation, naive-datetime normalisation,
+  side-effect-free Binance status, PATCH duplicate 400s,
+  custom-role assignment, SSRF body cap and scheduler RSS
+  through the SSRF fetcher, per-pair volume rollback,
+  one-commit-per-entity intelligence processing, and
+  distinct-symbol snapshot / SQL `GROUP BY` news queries).
+- Migration `0010_performance_indexes` (the only new
+  migration; 0001–0009 untouched) with composite indexes for
+  market alerts, market snapshots, futures snapshots, and
+  audit logs, plus a reverse downgrade.
+- 20 new tests in `backend/tests/test_phase9.py` (176 total,
+  none deleted or weakened), covering CORS, scheduler
+  reliability, password-reset hardening, encryption rotation,
+  SSRF, cross-module pipeline with duplicate prevention,
+  volume failure isolation, and every Telegram bot command
+  with mocked messages.
+- Frontend HTTP integration on localhost: real backend
+  (SQLite, Alembic head 0010) plus the frontend production
+  server — login page, proxy login with cookies, `/auth/me`,
+  overview with real data, every admin section API, logout
+  invalidating the session, unauthenticated admin calls
+  denied. Browser automation was unavailable, so this is
+  HTTP-level integration, not browser end-to-end testing.
+- Secrets scan clean (no `.env`, tokens, passwords, or keys
+  in the repository). PostgreSQL, Redis, Docker, Nginx,
+  HTTPS, live Telegram delivery, live Futures data, and
+  backup/restore runs remain NOT VERIFIED — see the audit
+  report for exact reasons and commands. HTTPS readiness
+  and CI are rated Failed in the report (Nginx is HTTP-only;
+  the workflow file cannot be pushed via the GitHub App),
+  so the system is not ready for public production exposure
+  until the Phase 10 deployment tasks are done.
 
 ## Completed features (Phase 8)
 
@@ -421,11 +469,13 @@
 
 ## Pending features
 
-- Phase 7 and all later phases (7–10). No work
-  from those phases has been started, and Phase 7
-  is NOT approved in this phase. The full Phase 8
-  dashboard is not built; Phase 6 adds only a
-  Competition Volume section to the home page.
+- Phase 10 — Deployment & Release. No Phase 10 work
+  has been started, and Phase 10 is NOT approved in
+  this phase. Phase 10 must add TLS termination,
+  verify PostgreSQL, Redis, Docker, and CI, verify
+  live Telegram delivery and Futures from an allowed
+  location, and run a backup/restore drill (see
+  `docs/PHASE_09_AUDIT_REPORT.md` §7).
 
 ## Known issues and limitations (still open, not faked)
 
@@ -459,39 +509,46 @@
 
 ## Latest test results
 
-- Backend tests: `pytest` from `backend/` — 103
-  passed (74 Phase 1–5 tests, plus 29 Phase 6
-  tests covering interval boundaries, UTC handling,
-  competition-window filtering, Decimal precision,
-  multiple pairs/competitions, trade dedup,
-  duplicate interval prevention, cumulative
-  calculations, late-trade recalculation, checkpoint
-  backfill and incomplete recovery, partial API
-  failures, 429 retry, fromId paging and the
-  forbidden fromId+time-window combination, verified
-  vs unverified multipliers, quote-asset handling,
-  missing rules, incomplete vs empty windows,
-  scheduler overlap prevention, duplicate Telegram
-  report prevention, API filters/pagination, and
-  database-failure 503).
+- Backend tests: `pytest` from `backend/` — 176
+  passed (156 Phases 1–8 tests plus 20 new Phase 9
+  tests covering CORS, scheduler reliability,
+  password-reset hardening, encryption rotation,
+  SSRF, cross-module pipeline with duplicate
+  prevention, volume failure isolation, and every
+  Telegram bot command with mocked messages).
+  No test was deleted or weakened.
 - Lint/format: `ruff check`, `ruff format --check`, and
   `black --check` all pass.
-- Alembic: `alembic upgrade head` against SQLite
-  succeeded, `alembic current` reports `0007` (head),
-  all 29 tables present (including the 5 Phase 6
-  tables).
+- Alembic: `alembic upgrade head` against a fresh
+  SQLite database succeeded, head `0010` (migration
+  0010 adds composite indexes; 0001–0009 untouched).
+  Downgrade and re-upgrade verified for 0001–0009;
+  the 0010 upgrade was verified during frontend
+  integration setup. PostgreSQL verification is NOT
+  VERIFIED (no server in this environment).
 - Live aggTrades smoke test via
-  `data-api.binance.vision` (2026-10-30): BTCUSDT
-  10:00–10:30 UTC fetched 26,000 trades across 26
-  pages, bucketed to 24,208 in-interval trades:
-  base 426.84376 BTC, quote 33,070,381.6869031 USDT.
-  Same call via `api.binance.com`: HTTP 451, code 0
+  `data-api.binance.vision` (2026-10-30, Phase 6):
+  BTCUSDT 10:00–10:30 UTC fetched 26,000 trades
+  across 26 pages, bucketed to 24,208 in-interval
+  trades: base 426.84376 BTC, quote
+  33,070,381.6869031 USDT. Same call via
+  `api.binance.com`: HTTP 451, code 0
   (restricted location). No competition interval
   was written from this smoke test.
-- Frontend: `npm run build` succeeded with the new
-  Competition Volume section.
-- Full details are in `docs/DEVELOPMENT_LOG.md`.
+- Frontend (Phase 9, localhost): `npm run build`
+  succeeded; production server plus a real backend
+  verified over HTTP — login page, proxy login with
+  cookies, `/auth/me`, overview with real data,
+  every admin section API, logout invalidating the
+  session, unauthenticated admin calls denied.
+  Browser automation was unavailable, so this is
+  HTTP-level integration, not browser end-to-end
+  testing.
+- Secrets scan (Phase 9): clean — no `.env`, tokens,
+  passwords, or keys in the repository.
+- Full details are in `docs/DEVELOPMENT_LOG.md` and
+  `docs/PHASE_09_AUDIT_REPORT.md`.
 
 ## Next phase awaiting approval
 
-Phase 7. Do not start it without explicit approval.
+Phase 10. Do not start it without explicit approval.

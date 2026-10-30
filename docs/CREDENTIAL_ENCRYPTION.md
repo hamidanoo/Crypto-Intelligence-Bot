@@ -63,3 +63,16 @@ Only credentials entered through the admin API are
 encrypted at rest by this design. Telegram group
 configuration stored in the database contains no
 token.
+
+## Phase 9 key-version notes
+
+- `CREDENTIAL_ENCRYPTION_KEY_ID` (default `v1`) and
+  `CREDENTIAL_ENCRYPTION_KEY_PREVIOUS_ID` label the current
+  and previous keys. During rotation, keep the previous key
+  and its id configured so rows encrypted under it still
+  decrypt; rows with an unknown key id raise an error
+  instead of silently falling back to the current key.
+- Settings validation rejects a configured key that is not
+  valid base64 decoding to exactly 32 bytes.
+- Set both new keys in `.env.example` (placeholders only);
+  never commit a real key.

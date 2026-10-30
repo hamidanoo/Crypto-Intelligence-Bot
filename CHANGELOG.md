@@ -1,5 +1,45 @@
 # Changelog
 
+## Phase 9 — Complete System Audit, Integration Testing & Security Hardening
+
+- Audit the full system (backend, frontend, database,
+  migrations 0001–0009, auth/RBAC, scheduler, Telegram,
+  Binance clients, all processing modules, configuration,
+  Docker, Compose, Nginx, docs, tests); full findings in
+  `docs/PHASE_09_AUDIT_REPORT.md`.
+- Fix a broken scheduler import that silently prevented
+  paused-job restoration on restart; fix market overview
+  returning 500 instead of 503 on database failure; narrow
+  the scheduler trigger refusal to paused jobs only.
+- Harden authentication and encryption: CORS `X-CSRF-Token`,
+  production HSTS and docs lockdown, stable encryption
+  key-version ids with legacy compatibility, settings key
+  validation, generic lockout messages with dummy Argon2
+  verify, password-reset session revocation and sibling
+  token invalidation, and audited forgot-password.
+- Fix reliability: naive-datetime normalisation, SSRF body
+  cap with scheduler RSS through the SSRF fetcher,
+  per-pair volume rollback, one-commit-per-entity
+  intelligence processing, distinct-symbol snapshot and
+  SQL `GROUP BY` news queries, PATCH duplicate 400s,
+  custom-role assignment, and side-effect-free Binance
+  status.
+- Add migration 0010 with composite performance indexes
+  (market alerts, market snapshots, futures snapshots,
+  audit logs); historical migrations untouched.
+- Add 20 cross-module integration tests
+  (`backend/tests/test_phase9.py`); full suite 176 passed.
+- Verify frontend HTTP integration on localhost (real
+  backend + production frontend server): login, cookies,
+  overview with real data, every admin section API,
+  logout invalidation, unauthenticated denial. Browser
+  automation was unavailable; this is HTTP-level
+  integration, not browser end-to-end testing.
+- Document honestly what is NOT VERIFIED: PostgreSQL,
+  Redis, Docker, Nginx, HTTPS (HTTP-only, Phase 10 work),
+  live Telegram delivery, live Futures data, and
+  backup/restore runs, with exact verification commands.
+
 ## Phase 8 — Professional Admin Dashboard & Security
 
 - Add administrator authentication and sessions:

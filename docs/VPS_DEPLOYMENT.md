@@ -34,3 +34,18 @@ database password) in production.
 - Live PostgreSQL migration 0009, Docker run, live
   Telegram delivery, and a production scheduler run
   are not yet verified for Phase 8.
+
+## Phase 9 deployment notes
+
+- Compose now binds all service ports to 127.0.0.1, adds
+  `restart: unless-stopped` and healthchecks, and only the
+  backend runs migrations (the bot entrypoint is cleared).
+- Before public exposure, Phase 10 must still: add TLS
+  termination to Nginx (currently HTTP-only), verify the
+  migration chain and test suite against real PostgreSQL
+  and Redis, run `docker compose up --build`, verify live
+  Telegram delivery and Futures from an allowed location,
+  and drill backup/restore. See
+  `docs/PHASE_09_AUDIT_REPORT.md` §6–§7 for the exact
+  commands. Do not run a second backend instance without
+  a distributed scheduler lock.

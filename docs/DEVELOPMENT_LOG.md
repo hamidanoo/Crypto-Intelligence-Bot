@@ -634,3 +634,33 @@ performed in this phase.
 - Not verified live: PostgreSQL migration 0009,
   Docker run, live Telegram delivery, production
   scheduler run, live Futures data (HTTP 451 here).
+
+## Phase 9 — Complete System Audit, Integration Testing & Security Hardening
+
+- Audited the full system; findings and the 24-area
+  production-readiness assessment are in
+  `docs/PHASE_09_AUDIT_REPORT.md`.
+- Fixes: scheduler paused-restore import (was silently
+  broken), market overview 500→503 on database failure,
+  scheduler trigger narrowed to paused jobs only, plus the
+  earlier batch (CORS CSRF header, production HSTS/docs
+  lockdown, stable encryption key ids, settings key
+  validation, generic lockout messages, password-reset
+  revocation, naive-datetime normalisation, PATCH
+  duplicate 400s, custom-role assignment, SSRF body cap
+  and scheduler RSS through the SSRF fetcher, per-pair
+  volume rollback, one-commit-per-entity processing,
+  distinct-symbol snapshot and SQL GROUP BY news queries,
+  migration 0010 composite indexes, Compose localhost
+  binds/healthchecks/restart, frontend Settings/redirect/
+  Dockerfile fixes).
+- Tests: 176 passed (156 prior + 20 new Phase 9).
+  Ruff check, ruff format, and black all clean.
+- Frontend HTTP integration on localhost passed (real
+  backend + production frontend; login, cookies, overview
+  with real data, every admin section API, logout
+  invalidation, unauthenticated denial). Browser
+  automation unavailable: HTTP-level only, not browser E2E.
+- Secrets scan clean. Not verified: PostgreSQL, Redis,
+  Docker, Nginx, HTTPS (HTTP-only), live Telegram
+  delivery, live Futures data, backup/restore runs.

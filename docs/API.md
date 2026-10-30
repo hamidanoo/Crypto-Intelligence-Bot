@@ -292,3 +292,18 @@ requires announcements.manage, and market watchlist
 writes require market.manage. `POST
 /prime-sales/estimate-allocation` remains public: it is
 a pure calculation from caller-supplied inputs.
+
+## Phase 9 API notes
+
+- `GET /binance/status` is side-effect-free: it never
+  writes integration rows. Authenticated collect
+  endpoints record integration status instead.
+- `PATCH /admin/users/{id}` and `PATCH /admin/roles/{id}`
+  return 400 (not 500) on duplicate email, username, or
+  role name. Custom database roles are assignable through
+  the user PATCH endpoint using their stored permissions.
+- `POST /admin/scheduler/{job_id}/trigger` refuses paused
+  jobs with 400 ("Scheduler job is paused; resume it
+  before triggering"). Triggering while the scheduler is
+  stopped schedules an immediate run on the next start.
+- `GET /admin/permissions` requires `roles.view`.

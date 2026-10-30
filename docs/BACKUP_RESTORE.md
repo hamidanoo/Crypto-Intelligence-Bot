@@ -20,3 +20,12 @@ Restore:
    components as ready.
 
 Test restores periodically. An untested backup is not a backup.
+
+## Phase 9 status
+
+No live backup or restore run was performed during the
+Phase 9 audit (no PostgreSQL server in that environment),
+so backup/restore remain NOT VERIFIED. Drill them against
+a staging database before production use, using the
+`pg_dump`/`pg_restore` procedure above, and record the
+result in the Phase 10 report.
