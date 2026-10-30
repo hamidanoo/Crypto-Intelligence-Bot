@@ -30,6 +30,7 @@ def register_jobs() -> None:
     same id is left alone.
     """
     from app.announcements.scheduler_job import JOB_ID, collect_all_announcements
+    from app.competitions.scheduler_jobs import JOB_COMPETITION, process_competition_job
     from app.config import settings
     from app.intelligence.scheduler_jobs import (
         JOB_AIRDROP,
@@ -55,6 +56,11 @@ def register_jobs() -> None:
         (
             JOB_PRIME,
             process_prime_sale_job,
+            max(1, settings.intelligence_processing_interval_seconds // 60),
+        ),
+        (
+            JOB_COMPETITION,
+            process_competition_job,
             max(1, settings.intelligence_processing_interval_seconds // 60),
         ),
     ]
