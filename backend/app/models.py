@@ -442,6 +442,130 @@ class CampaignNotification(Base, TimestampMixin):
     )
 
 
+class Competition(Base, TimestampMixin):
+    """A Binance trading competition, discovered from an official
+    announcement. Every detail field is nullable or empty when
+    the announcement title does not contain it: a missing
+    reward pool, date, or trading pair is stored as missing,
+    never invented. ``verification_status`` is
+    "official_website" for a title taken from the official
+    feed, or "needs_review" when the title cannot be parsed
+    into a reliable competition name (see competitions
+    parsing). Status is UNKNOWN by default; date-based
+    transitions only apply when both dates are present.
+    """
+
+    __tablename__ = "competitions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    announcement_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("announcements.id", ondelete="CASCADE"),
+        unique=True,
+        index=True,
+        nullable=False,
+    )
+    competition_name: Mapped[str] = mapped_column(String(512), index=True, nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    competition_type: Mapped[str] = mapped_column(
+        String(64), index=True, default="GENERAL", nullable=False
+    )
+    official_url: Mapped[str] = mapped_column(String(1024), nullable=False)
+    reward_pool: Mapped[Decimal | None] = mapped_column(Numeric(28, 8))
+    reward_currency: Mapped[str | None] = mapped_column(String(32))
+    start_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    end_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    registration_start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    registration_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    status: Mapped[str] = mapped_column(String(32), index=True, default="UNKNOWN", nullable=False)
+    eligible_trading_pairs: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    eligible_assets: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    competition_rules: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    eligibility_requirements: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    multiplier_rules: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    source: Mapped[str] = mapped_column(String(128), default="binance_website_cms", nullable=False)
+    verification_status: Mapped[str] = mapped_column(
+        String(64), default="official_website", nullable=False
+    )
+    metadata_json: Mapped[dict] = mapped_column("metadata", JSON, default=dict, nullable=False)
+
+
+class CompetitionTradingPair(Base, TimestampMixin):
+    __tablename__ = "competition_trading_pairs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    competition_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("competitions.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    pair: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    base_asset: Mapped[str | None] = mapped_column(String(64))
+    quote_asset: Mapped[str | None] = mapped_column(String(64))
+
+    __table_args__ = (
+        UniqueConstraint(
+            "competition_id", "pair", name="uq_competition_trading_pairs_competition_pair"
+        ),
+    )
+
+
+class CompetitionReward(Base, TimestampMixin):
+    __tablename__ = "competition_rewards"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    competition_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("competitions.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    rank_range: Mapped[str | None] = mapped_column(String(128))
+    reward_amount: Mapped[Decimal | None] = mapped_column(Numeric(28, 8))
+    reward_currency: Mapped[str | None] = mapped_column(String(32))
+    description: Mapped[str | None] = mapped_column(Text)
+
+
+class CompetitionRule(Base, TimestampMixin):
+    __tablename__ = "competition_rules"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    competition_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("competitions.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    rule_type: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    source_text: Mapped[str | None] = mapped_column(Text)
+
+
+class CompetitionUpdate(Base, TimestampMixin):
+    __tablename__ = "competition_updates"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    competition_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("competitions.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    update_type: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    field_name: Mapped[str | None] = mapped_column(String(128))
+    old_value: Mapped[dict | None] = mapped_column(JSON)
+    new_value: Mapped[dict | None] = mapped_column(JSON)
+    note: Mapped[str | None] = mapped_column(Text)
+
+
+class CompetitionCollectionRun(Base):
+    __tablename__ = "competition_collection_runs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    source_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("announcement_sources.id", ondelete="SET NULL"), index=True
+    )
+    started: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, index=True, nullable=False
+    )
+    completed: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    status: Mapped[str] = mapped_column(String(32), index=True, default="running", nullable=False)
+    found: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    updated: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    skipped: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    error_message: Mapped[str | None] = mapped_column(Text)
+
+
 class AuditLog(Base, TimestampMixin):
     """Append-only record of administrative actions."""
 
