@@ -1,6 +1,18 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
+from decimal import Decimal
+
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -85,10 +97,10 @@ class ApiIntegration(Base, TimestampMixin):
 class MarketSnapshot(Base):
     """A point-in-time Spot market snapshot, as returned by Binance.
 
-    ``collected_at`` is when this system recorded the snapshot, in UTC.
-    The exchange's own open/close times are stored separately where
-    the endpoint provides them, so exchange time is never confused
-    with collection time.
+    Financial values are stored as Numeric (Decimal in Python),
+    not binary floats, so prices and volumes do not lose
+    precision. ``collected_at`` is when this system recorded the
+    snapshot, in UTC.
     """
 
     __tablename__ = "market_snapshots"
@@ -96,13 +108,13 @@ class MarketSnapshot(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     symbol: Mapped[str] = mapped_column(String(32), index=True, nullable=False)
     source: Mapped[str] = mapped_column(String(64), default="binance_spot", nullable=False)
-    price: Mapped[float] = mapped_column(Float, nullable=False)
-    price_change_24h: Mapped[float | None] = mapped_column(Float)
-    price_change_percent_24h: Mapped[float | None] = mapped_column(Float)
-    high_24h: Mapped[float | None] = mapped_column(Float)
-    low_24h: Mapped[float | None] = mapped_column(Float)
-    volume_24h: Mapped[float | None] = mapped_column(Float)
-    quote_volume_24h: Mapped[float | None] = mapped_column(Float)
+    price: Mapped[Decimal] = mapped_column(Numeric(28, 8), nullable=False)
+    price_change_24h: Mapped[Decimal | None] = mapped_column(Numeric(28, 8))
+    price_change_percent_24h: Mapped[Decimal | None] = mapped_column(Numeric(20, 8))
+    high_24h: Mapped[Decimal | None] = mapped_column(Numeric(28, 8))
+    low_24h: Mapped[Decimal | None] = mapped_column(Numeric(28, 8))
+    volume_24h: Mapped[Decimal | None] = mapped_column(Numeric(28, 8))
+    quote_volume_24h: Mapped[Decimal | None] = mapped_column(Numeric(28, 8))
     collected_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, index=True, nullable=False
     )
@@ -117,10 +129,10 @@ class FuturesSnapshot(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     symbol: Mapped[str] = mapped_column(String(32), index=True, nullable=False)
     source: Mapped[str] = mapped_column(String(64), default="binance_futures", nullable=False)
-    funding_rate: Mapped[float | None] = mapped_column(Float)
+    funding_rate: Mapped[Decimal | None] = mapped_column(Numeric(20, 10))
     next_funding_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    mark_price: Mapped[float | None] = mapped_column(Float)
-    open_interest: Mapped[float | None] = mapped_column(Float)
+    mark_price: Mapped[Decimal | None] = mapped_column(Numeric(28, 8))
+    open_interest: Mapped[Decimal | None] = mapped_column(Numeric(28, 8))
     collected_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, index=True, nullable=False
     )

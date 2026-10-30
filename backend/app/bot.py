@@ -19,9 +19,7 @@ router = Router()
 
 @router.message(Command("start"))
 async def start_handler(message: types.Message) -> None:
-    await message.answer(
-        "Crypto Intelligence Bot is online. Use /help to see available commands."
-    )
+    await message.answer("Crypto Intelligence Bot is online. Use /help to see available commands.")
 
 
 @router.message(Command("help"))
@@ -36,7 +34,9 @@ async def help_handler(message: types.Message) -> None:
 
 @router.message(Command("status"))
 async def status_handler(message: types.Message) -> None:
-    await message.answer("Bot status: online. Foundation phase only; market modules arrive in later phases.")
+    await message.answer(
+        "Bot status: online. Foundation phase only; market modules arrive in later phases."
+    )
 
 
 async def run_bot() -> None:

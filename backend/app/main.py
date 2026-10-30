@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
@@ -8,6 +9,7 @@ from app.api.binance import router as binance_router
 from app.api.health import router as health_router
 from app.config import settings
 from app.logging_config import configure_logging
+from app.scheduler import shutdown_scheduler, start_scheduler
 
 configure_logging()
 logger = logging.getLogger(__name__)
@@ -16,7 +18,11 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     logger.info("Crypto Intelligence API starting in %s environment", settings.environment)
+    start_scheduler()
     yield
+    shutdown_scheduler()
+    # Allow the scheduled APScheduler shutdown to execute.
+    await asyncio.sleep(0.1)
     logger.info("Crypto Intelligence API shutting down")
 
 
@@ -25,8 +31,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept"],
 )
 app.include_router(health_router)
 app.include_router(binance_router)

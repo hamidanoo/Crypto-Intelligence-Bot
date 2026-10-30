@@ -76,6 +76,8 @@ class BinanceClient:
     async def _request(self, base_url: str, path: str, params: dict | None = None):
         """GET with retries for transient failures only."""
         last_error: Exception | None = None
+        last_status: int | None = None
+        last_message: str | None = None
         for attempt in range(1, self.max_retries + 1):
             try:
                 # A test transport replaces the network entirely, so
@@ -92,22 +94,40 @@ class BinanceClient:
                 async with httpx.AsyncClient(**client_kwargs) as client:
                     response = await client.get(path, params=params)
                 if response.status_code == 429 or response.status_code >= 500:
-                    retry_after = response.headers.get("Retry-After")
-                    delay = float(retry_after) if retry_after else 0.5 * (2 ** (attempt - 1))
+                    last_status = response.status_code
+                    try:
+                        body = response.json()
+                        last_message = body.get("msg") if isinstance(body, dict) else None
+                    except ValueError:
+                        last_message = None
                     logger.warning(
-                        "Binance %s returned %s, retry %s/%s after %.1fs",
-                        path, response.status_code, attempt, self.max_retries, delay,
+                        "Binance %s returned %s, retry %s/%s",
+                        path,
+                        response.status_code,
+                        attempt,
+                        self.max_retries,
                     )
-                    await asyncio.sleep(delay)
+                    if attempt < self.max_retries:
+                        retry_after = response.headers.get("Retry-After")
+                        try:
+                            delay = (
+                                float(retry_after) if retry_after else 0.5 * (2 ** (attempt - 1))
+                            )
+                        except (TypeError, ValueError):
+                            delay = 0.5 * (2 ** (attempt - 1))
+                        await asyncio.sleep(delay)
                     continue
                 if response.status_code >= 400:
                     body = {}
                     try:
-                        body = response.json()
+                        parsed = response.json()
+                        body = parsed if isinstance(parsed, dict) else {}
                     except ValueError:
                         pass
                     raise BinanceAPIError(
-                        body.get("msg", f"Binance request failed with status {response.status_code}"),
+                        body.get(
+                            "msg", f"Binance request failed with status {response.status_code}"
+                        ),
                         status=response.status_code,
                         code=body.get("code"),
                     )
@@ -116,10 +136,25 @@ class BinanceClient:
                 raise
             except (httpx.TimeoutException, httpx.TransportError) as exc:
                 last_error = exc
-                delay = 0.5 * (2 ** (attempt - 1))
-                logger.warning("Binance %s transport error, retry %s/%s: %s", path, attempt, self.max_retries, exc)
-                await asyncio.sleep(delay)
-        raise BinanceAPIError(f"Binance request failed after {self.max_retries} attempts: {last_error}")
+                if attempt < self.max_retries:
+                    delay = 0.5 * (2 ** (attempt - 1))
+                    logger.warning(
+                        "Binance %s transport error, retry %s/%s: %s",
+                        path,
+                        attempt,
+                        self.max_retries,
+                        exc,
+                    )
+                    await asyncio.sleep(delay)
+        if last_status is not None:
+            message = last_message or (
+                f"Binance request failed with status {last_status} "
+                f"after {self.max_retries} attempts"
+            )
+            raise BinanceAPIError(message, status=last_status)
+        raise BinanceAPIError(
+            f"Binance request failed after {self.max_retries} attempts: {last_error}"
+        )
 
     async def _timed(self, base_url: str, path: str, params: dict | None = None):
         started = time.monotonic()
@@ -162,7 +197,9 @@ class BinanceClient:
             raise ValueError(f"Unsupported kline interval: {interval!r}")
         limit = max(1, min(limit, 1000))
         rows = await self._request(
-            self.spot_base_url, "/api/v3/klines", {"symbol": symbol, "interval": interval, "limit": limit}
+            self.spot_base_url,
+            "/api/v3/klines",
+            {"symbol": symbol, "interval": interval, "limit": limit},
         )
         klines = []
         for row in rows:
@@ -192,11 +229,16 @@ class BinanceClient:
     async def get_funding_rate(self, symbol: str, limit: int = 1) -> dict:
         symbol = validate_symbol(symbol)
         rows = await self._request(
-            self.futures_base_url, "/fapi/v1/fundingRate", {"symbol": symbol, "limit": max(1, min(limit, 100))}
+            self.futures_base_url,
+            "/fapi/v1/fundingRate",
+            {"symbol": symbol, "limit": max(1, min(limit, 100))},
         )
         if not rows:
             raise BinanceAPIError(f"No funding rate data returned for {symbol}")
-        latest = rows[-1]
+        # Do not assume the response order: pick the row with the
+        # latest funding time, so the result is correct regardless
+        # of whether the endpoint returns newest-first or oldest-first.
+        latest = max(rows, key=lambda row: int(row["fundingTime"]))
         return {
             "symbol": latest["symbol"],
             "funding_rate": float(latest["fundingRate"]),
@@ -206,7 +248,9 @@ class BinanceClient:
 
     async def get_premium_index(self, symbol: str) -> dict:
         symbol = validate_symbol(symbol)
-        data = await self._request(self.futures_base_url, "/fapi/v1/premiumIndex", {"symbol": symbol})
+        data = await self._request(
+            self.futures_base_url, "/fapi/v1/premiumIndex", {"symbol": symbol}
+        )
         return {
             "symbol": data["symbol"],
             "mark_price": float(data["markPrice"]),
@@ -217,7 +261,9 @@ class BinanceClient:
 
     async def get_open_interest(self, symbol: str) -> dict:
         symbol = validate_symbol(symbol)
-        data = await self._request(self.futures_base_url, "/fapi/v1/openInterest", {"symbol": symbol})
+        data = await self._request(
+            self.futures_base_url, "/fapi/v1/openInterest", {"symbol": symbol}
+        )
         return {
             "symbol": data["symbol"],
             "open_interest": float(data["openInterest"]),

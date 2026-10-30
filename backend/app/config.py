@@ -1,3 +1,4 @@
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -19,9 +20,7 @@ class Settings(BaseSettings):
     environment: str = "development"
     debug: bool = False
 
-    database_url: str = (
-        "postgresql+psycopg://crypto:crypto@localhost:5432/crypto_intelligence"
-    )
+    database_url: str = "postgresql+psycopg://crypto:crypto@localhost:5432/crypto_intelligence"
     redis_url: str = "redis://localhost:6379/0"
 
     api_host: str = "0.0.0.0"
@@ -43,6 +42,14 @@ class Settings(BaseSettings):
     binance_request_timeout_seconds: float = 10.0
     binance_max_retries: int = 3
     tracked_symbols: str = "BTCUSDT,ETHUSDT,BNBUSDT,SOLUSDT,XRPUSDT"
+
+    @model_validator(mode="after")
+    def _validate_production_secret(self):
+        if self.environment == "production" and (
+            not self.secret_key or self.secret_key == "change-me-in-production"
+        ):
+            raise ValueError("SECRET_KEY must be set to a real value when ENVIRONMENT=production")
+        return self
 
     @property
     def tracked_symbol_list(self) -> list[str]:

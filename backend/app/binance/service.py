@@ -8,6 +8,7 @@ mid-collection does not leave a half-written batch for a symbol.
 
 import logging
 from datetime import datetime, timezone
+from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
@@ -21,9 +22,19 @@ def _now_utc() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _decimal(value) -> Decimal | None:
+    """Convert a numeric value to Decimal via its string form, so
+    a binary float never introduces precision error on storage."""
+    if value is None:
+        return None
+    return Decimal(str(value))
+
+
 async def collect_market_snapshots(
     db: Session, client: BinanceClient, symbols: list[str]
 ) -> list[MarketSnapshot]:
+    if len(symbols) > 20:
+        raise ValueError("At most 20 symbols can be collected in one request")
     snapshots: list[MarketSnapshot] = []
     for raw_symbol in symbols:
         symbol = validate_symbol(raw_symbol)
@@ -31,13 +42,13 @@ async def collect_market_snapshots(
         snapshot = MarketSnapshot(
             symbol=symbol,
             source=ticker["source"],
-            price=ticker["price"],
-            price_change_24h=ticker["price_change_24h"],
-            price_change_percent_24h=ticker["price_change_percent_24h"],
-            high_24h=ticker["high_24h"],
-            low_24h=ticker["low_24h"],
-            volume_24h=ticker["volume_24h"],
-            quote_volume_24h=ticker["quote_volume_24h"],
+            price=_decimal(ticker["price"]),
+            price_change_24h=_decimal(ticker["price_change_24h"]),
+            price_change_percent_24h=_decimal(ticker["price_change_percent_24h"]),
+            high_24h=_decimal(ticker["high_24h"]),
+            low_24h=_decimal(ticker["low_24h"]),
+            volume_24h=_decimal(ticker["volume_24h"]),
+            quote_volume_24h=_decimal(ticker["quote_volume_24h"]),
             collected_at=_now_utc(),
         )
         db.add(snapshot)
@@ -52,6 +63,8 @@ async def collect_market_snapshots(
 async def collect_futures_snapshots(
     db: Session, client: BinanceClient, symbols: list[str]
 ) -> list[FuturesSnapshot]:
+    if len(symbols) > 20:
+        raise ValueError("At most 20 symbols can be collected in one request")
     snapshots: list[FuturesSnapshot] = []
     for raw_symbol in symbols:
         symbol = validate_symbol(raw_symbol)
@@ -61,10 +74,10 @@ async def collect_futures_snapshots(
         snapshot = FuturesSnapshot(
             symbol=symbol,
             source="binance_futures",
-            funding_rate=funding["funding_rate"],
+            funding_rate=_decimal(funding["funding_rate"]),
             next_funding_time=premium["next_funding_time"],
-            mark_price=premium["mark_price"],
-            open_interest=interest["open_interest"],
+            mark_price=_decimal(premium["mark_price"]),
+            open_interest=_decimal(interest["open_interest"]),
             collected_at=_now_utc(),
         )
         db.add(snapshot)

@@ -26,5 +26,26 @@ def register_jobs() -> None:
 def start_scheduler() -> None:
     register_jobs()
     if not scheduler.running:
+        # A previous event loop may have been closed (for example
+        # after a test run or a reload). APScheduler keeps that
+        # loop reference, so clear it before starting again, or
+        # the scheduler would try to use a closed loop.
+        event_loop = getattr(scheduler, "_eventloop", None)
+        if event_loop is not None and event_loop.is_closed():
+            scheduler._eventloop = None
         scheduler.start()
         logger.info("Scheduler started")
+
+
+def shutdown_scheduler() -> None:
+    """Stop the scheduler if it is running. Safe to call when it
+    was never started, which is the case for a plain test run.
+
+    APScheduler's asyncio shutdown is scheduled on the event
+    loop rather than executed immediately, so callers in an
+    async context should allow a loop tick afterwards before
+    asserting that the scheduler has stopped.
+    """
+    if scheduler.running:
+        scheduler.shutdown(wait=False)
+        logger.info("Scheduler stop scheduled")

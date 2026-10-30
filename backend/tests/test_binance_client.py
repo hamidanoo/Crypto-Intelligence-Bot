@@ -26,14 +26,27 @@ def test_kline_parsing_with_mock_transport():
         return httpx.Response(
             200,
             json=[
-                [1793347200000, "78186.0", "78241.3", "77911.0", "77939.95", "1077.88",
-                 1793350799999, "84117826.88", 124783, "447.9", "34958282.18", "0"]
+                [
+                    1793347200000,
+                    "78186.0",
+                    "78241.3",
+                    "77911.0",
+                    "77939.95",
+                    "1077.88",
+                    1793350799999,
+                    "84117826.88",
+                    124783,
+                    "447.9",
+                    "34958282.18",
+                    "0",
+                ]
             ],
         )
 
     async def run():
         client = BinanceClient(
-            "https://data-api.binance.vision", "https://fapi.binance.com",
+            "https://data-api.binance.vision",
+            "https://fapi.binance.com",
             transport=httpx.MockTransport(handler),
         )
         return await client.get_klines("BTCUSDT", interval="1h", limit=1)
@@ -56,7 +69,8 @@ def test_restricted_location_error_is_surfaced():
 
     async def run():
         client = BinanceClient(
-            "https://api.binance.com", "https://fapi.binance.com",
+            "https://api.binance.com",
+            "https://fapi.binance.com",
             transport=httpx.MockTransport(handler),
         )
         with pytest.raises(BinanceAPIError) as exc_info:
@@ -75,7 +89,8 @@ def test_binance_error_on_4xx():
 
     async def run():
         client = BinanceClient(
-            "https://data-api.binance.vision", "https://fapi.binance.com",
+            "https://data-api.binance.vision",
+            "https://fapi.binance.com",
             transport=httpx.MockTransport(handler),
         )
         with pytest.raises(BinanceAPIError) as exc_info:
@@ -96,9 +111,15 @@ def test_collect_market_snapshots_persists_to_sqlite():
     class FakeClient:
         async def get_ticker_24hr(self, symbol):
             return {
-                "symbol": symbol, "price": 100.0, "price_change_24h": 1.0,
-                "price_change_percent_24h": 1.0, "high_24h": 101.0, "low_24h": 99.0,
-                "volume_24h": 123.0, "quote_volume_24h": 12300.0, "source": "binance_spot",
+                "symbol": symbol,
+                "price": 100.0,
+                "price_change_24h": 1.0,
+                "price_change_percent_24h": 1.0,
+                "high_24h": 101.0,
+                "low_24h": 99.0,
+                "volume_24h": 123.0,
+                "quote_volume_24h": 12300.0,
+                "source": "binance_spot",
             }
 
     import asyncio

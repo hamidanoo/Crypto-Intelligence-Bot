@@ -20,6 +20,9 @@
   - `market_snapshots` — Spot snapshot per symbol: price, 24h
     change, high, low, volume, quote volume, source, and UTC
     `collected_at`, indexed by symbol and collected_at.
+    Financial values are stored as Numeric (Decimal):
+    prices and volumes `Numeric(28, 8)`, funding rate
+    `Numeric(20, 10)` (migration `0003`).
   - `futures_snapshots` — Futures snapshot per symbol: funding
     rate, next funding time, mark price, open interest, source,
     and UTC `collected_at`, indexed by symbol and collected_at.

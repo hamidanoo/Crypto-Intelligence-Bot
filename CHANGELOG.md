@@ -1,5 +1,38 @@
 # Changelog
 
+## Phase 1 + Phase 2 Bug-Fix Pass
+
+- Start and stop the APScheduler scheduler from the API
+  lifespan, including recovery from a previously closed event
+  loop, and add lifespan tests.
+- Run database migrations automatically on backend container
+  start via `backend/entrypoint.sh` (`alembic upgrade head`
+  before the API starts).
+- Route the frontend through the `/api` proxy by default
+  (Next.js rewrites, Nginx `/api/` proxy in production).
+- Fail fast in production when `SECRET_KEY` is still the
+  default placeholder, and tighten CORS methods and headers.
+- Pick the Binance funding rate by latest funding time,
+  not by last row position.
+- Fix retry handling: non-numeric Retry-After no longer
+  crashes, no sleep on the final attempt, and final 429/5xx
+  errors report their real status and message.
+- Store snapshot financial values as Numeric (Decimal) via
+  migration `0003`, converting via string form on collection.
+- Ping Spot and Futures concurrently in `/binance/status`.
+- Add a JSON body contract to collect endpoints, a
+  20-symbol limit, and a 503 for database failures.
+- Add Redis-backed caching with an in-memory fallback for
+  price, ticker, and klines, and a 120/minute per-IP rate
+  limit on Binance routes.
+- Add CI (GitHub Actions), ruff and black configuration,
+  a local check script, and 10 new tests for the fixes.
+- Document issue classification in
+  `docs/ISSUE_FIX_PLAN.md` and external verification steps
+  in `docs/EXTERNAL_VERIFICATION.md`. Docker, live
+  PostgreSQL, live Redis, live Telegram, and live Futures
+  testing remain unverified and are documented, not faked.
+
 ## Phase 2 — Binance Market Integration
 
 - Add Binance Spot API client with price, 24-hour ticker, and

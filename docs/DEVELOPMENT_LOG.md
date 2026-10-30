@@ -144,3 +144,97 @@ phase work was started.
 - Alembic: `alembic history` shows migration `0002` as head.
   Live PostgreSQL execution remains an open item, as in
   Phase 1, because no PostgreSQL instance is available here.
+
+## Phase 1 + Phase 2 Bug-Fix Pass
+
+### Branch and classification
+
+Branch `fix-phase1-phase2-issues` was created from
+`phase-02-binance-integration` at
+`6fa162a1e99c1d860d0f004f8eecf0e0ca19f8f3`, preserving all
+Phase 1 and Phase 2 work. No Phase 3 work was started.
+Issues were classified in `docs/ISSUE_FIX_PLAN.md` as
+fixable here, requiring external infrastructure or
+credentials, or not currently necessary for a later phase.
+No scope was expanded: no dashboard pages, auth, or
+Phase 3+ features were added.
+
+### Fixes implemented
+
+- Scheduler: `main.py` lifespan now calls
+  `start_scheduler()` on startup and `shutdown_scheduler()`
+  plus a loop tick on shutdown. APScheduler's asyncio
+  shutdown is scheduled on the loop, not immediate, which
+  was found by a failing test and is now handled in the
+  lifespan and in the tests. A closed previous event loop
+  is cleared before restarting, so a scheduler restart in
+  the same process does not try to use a closed loop.
+- Migrations: `backend/entrypoint.sh` runs
+  `alembic upgrade head` before the API (or bot) starts in
+  Docker, failing fast if the database is unavailable.
+  The entrypoint script syntax was checked with `sh -n`.
+- Frontend proxy: `frontend/next.config.js` rewrites
+  `/api/:path*` to the backend, `NEXT_PUBLIC_API_URL`
+  defaults to `/api`, and Compose sets
+  `BACKEND_INTERNAL_URL=http://backend:8000` for the
+  frontend service. A stale frontend server must be
+  restarted after a config change; a fresh server was
+  verified to proxy `GET /api/health` with HTTP 200.
+- Production secret and CORS: a Pydantic model validator
+  rejects `ENVIRONMENT=production` with the default secret,
+  and CORS now allows an explicit method and header list.
+- Funding rate: `get_funding_rate` now uses
+  `max(rows, key=fundingTime)`.
+- Retry: Retry-After parsing falls back to exponential
+  backoff on a non-numeric value, the final attempt does
+  not sleep, and final 429/5xx errors carry the real
+  status and message instead of "None".
+- Decimal precision: snapshot models now use
+  `Numeric(28, 8)` (funding rate `Numeric(20, 10)`), with
+  migration `0003` using batch alter so it also works on
+  SQLite. The service converts floats via `str(value)` to
+  Decimal before storage, so binary float error is not
+  introduced on write. API display values remain JSON
+  numbers (Decimal serialised as float in responses).
+- Concurrent status: `/binance/status` uses
+  `asyncio.gather` for Spot and Futures pings.
+- API validation: collect endpoints now accept a JSON
+  body (`CollectRequest`, max 20 symbols), fall back to
+  tracked symbols when omitted, and return 503 on a
+  database error instead of a raw 500. The service also
+  enforces the 20-symbol limit.
+- Cache and rate limiting: `app/cache.py` tries Redis
+  first (1-second connect timeout) and falls back to an
+  in-memory TTL cache, never failing a request on a cache
+  error. `app/rate_limit.py` limits Binance routes to 120
+  requests per minute per client IP, single-instance only;
+  distributed limiting is documented for later.
+- CI and formatting: `.github/workflows/ci.yml`,
+  `backend/pyproject.toml` (ruff line length 100, black),
+  and `scripts/check.sh`. All backend code and tests were
+  formatted with ruff format and black, and pass
+  `ruff check`, `ruff format --check`, and `black --check`.
+
+### Testing performed in this fix pass
+
+- Backend tests: `pytest` from `backend/` — 22 passed.
+  Two initial failures were fixed, not hidden: the
+  scheduler test needed an async context and a loop tick
+  after shutdown, and the collect endpoint test needed a
+  shared SQLite connection (StaticPool) because FastAPI
+  runs endpoints in a different thread from the test.
+- Alembic against SQLite: `alembic upgrade head`
+  succeeded through `0003`, `alembic current` reports
+  `0003` (head), and all 7 tables exist.
+- Live Spot via data-api.binance.vision: BTCUSDT price
+  77799.9, first call `"cached": false`, second call
+  `"cached": true`; `/binance/status` Spot ok, Futures
+  unavailable with the restricted-location message.
+- Frontend: `npm run build` succeeded; a fresh
+  `npm start` server on port 3001 proxied
+  `GET /api/health` to the backend with HTTP 200.
+- Not tested here, and documented in
+  `docs/EXTERNAL_VERIFICATION.md` with exact commands:
+  Docker Compose run, live PostgreSQL migrations,
+  Redis-backed cache, live Telegram polling, and live
+  Binance Futures.

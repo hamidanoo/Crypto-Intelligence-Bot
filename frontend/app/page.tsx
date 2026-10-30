@@ -9,7 +9,7 @@ type Health = {
   timestamp: string;
 };
 
-const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
 export default function Home() {
   const [health, setHealth] = useState<Health | null>(null);

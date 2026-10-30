@@ -20,10 +20,16 @@ class FakeClient:
         from datetime import datetime, timezone
 
         return {
-            "symbol": symbol, "price": 77939.95, "price_change_24h": -2033.0,
-            "price_change_percent_24h": -2.542, "high_24h": 81971.0, "low_24h": 76500.0,
-            "volume_24h": 30000.0, "quote_volume_24h": 2300000000.0,
-            "open_time": datetime.now(timezone.utc), "close_time": datetime.now(timezone.utc),
+            "symbol": symbol,
+            "price": 77939.95,
+            "price_change_24h": -2033.0,
+            "price_change_percent_24h": -2.542,
+            "high_24h": 81971.0,
+            "low_24h": 76500.0,
+            "volume_24h": 30000.0,
+            "quote_volume_24h": 2300000000.0,
+            "open_time": datetime.now(timezone.utc),
+            "close_time": datetime.now(timezone.utc),
             "source": "binance_spot",
         }
 
@@ -31,10 +37,22 @@ class FakeClient:
         from datetime import datetime, timezone
 
         now = datetime.now(timezone.utc)
-        return [{"symbol": symbol, "interval": interval, "open_time": now, "open": 78000.0,
-                 "high": 78200.0, "low": 77900.0, "close": 77939.95, "volume": 100.0,
-                 "close_time": now, "quote_volume": 7800000.0, "trade_count": 100,
-                 "source": "binance_spot"}]
+        return [
+            {
+                "symbol": symbol,
+                "interval": interval,
+                "open_time": now,
+                "open": 78000.0,
+                "high": 78200.0,
+                "low": 77900.0,
+                "close": 77939.95,
+                "volume": 100.0,
+                "close_time": now,
+                "quote_volume": 7800000.0,
+                "trade_count": 100,
+                "source": "binance_spot",
+            }
+        ]
 
 
 app.dependency_overrides[get_binance_client] = lambda: FakeClient()
