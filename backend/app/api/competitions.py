@@ -12,9 +12,8 @@ include duration, reward pool, eligible pairs, status,
 and the update timeline. There is no volume
 aggregation endpoint here — that is Phase 6 work.
 
-Manual collection is not admin-gated in this phase
-(authentication is Phase 8), so it must only be
-exposed behind the deployment's own access controls.
+Manual collection is gated in Phase 8 by the
+collections.run permission and CSRF protection.
 """
 
 import logging
@@ -29,6 +28,8 @@ from app.announcements.client import AnnouncementAPIError, BinanceAnnouncementCl
 from app.announcements.service import collect_from_source_async, ensure_default_source
 from app.competitions.processing import competition_pairs, process_competitions
 from app.database import get_db
+from app.api.admin_common import audit as _audit_collection
+from app.auth.dependencies import require_csrf, require_permission
 from app.models import (
     Competition,
     CompetitionReward,
@@ -278,7 +279,15 @@ async def list_competition_pairs(
 
 
 @router.post("/competitions/collect")
-async def collect_competitions(request: Request, db: Session = Depends(get_db)):
+async def collect_competitions(
+    request: Request,
+    db: Session = Depends(get_db),
+    _admin=Depends(require_permission("collections.run")),
+    _csrf=Depends(require_csrf),
+):
+    _audit_collection(
+        db, _admin, "collection.requested", entity="collection", details={"path": request.url.path}
+    )
     check_rate_limit(request)
     try:
         source = ensure_default_source(db)

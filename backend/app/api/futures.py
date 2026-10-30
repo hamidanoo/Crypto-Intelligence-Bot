@@ -21,6 +21,8 @@ from sqlalchemy.orm import Session
 from app.binance.client import BinanceClient, validate_symbol
 from app.config import settings
 from app.database import get_db
+from app.api.admin_common import audit as _audit_collection
+from app.auth.dependencies import require_csrf, require_permission
 from app.marketintel.service import (
     collect_futures,
     collect_futures_ratios,
@@ -225,7 +227,15 @@ async def futures_summary(request: Request, db: Session = Depends(get_db)):
 
 
 @router.post("/futures/collect")
-async def collect_futures_endpoint(request: Request, db: Session = Depends(get_db)):
+async def collect_futures_endpoint(
+    request: Request,
+    db: Session = Depends(get_db),
+    _admin=Depends(require_permission("collections.run")),
+    _csrf=Depends(require_csrf),
+):
+    _audit_collection(
+        db, _admin, "collection.requested", entity="collection", details={"path": request.url.path}
+    )
     check_rate_limit(request)
     try:
         result = await collect_futures(db, _client(), settings.tracked_symbol_list)

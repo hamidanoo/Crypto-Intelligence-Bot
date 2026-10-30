@@ -15,9 +15,8 @@ frontend calls /api/competition-volume, which the
 frontend proxy maps to this backend route. There is
 no /api/v1/competition-volume route.
 
-Manual collection is not admin-gated in this phase
-(authentication is Phase 8), so it must only be
-exposed behind the deployment's own access controls.
+Manual collection is gated in Phase 8 by the
+collections.run permission and CSRF protection.
 
 Accuracy labels are part of the contract: public
 market volume comes from Binance public trade data
@@ -41,6 +40,8 @@ from app.binance.client import BinanceAPIError, BinanceClient
 from app.competitions.processing import competition_pairs
 from app.config import settings
 from app.database import get_db
+from app.api.admin_common import audit as _audit_collection
+from app.auth.dependencies import require_csrf, require_permission
 from app.models import (
     Competition,
     CompetitionPairConfiguration,
@@ -364,7 +365,15 @@ def _binance_failure_response(summary: dict):
 
 
 @router.post("/competition-volume/collect")
-async def collect_all_volumes(request: Request, db: Session = Depends(get_db)):
+async def collect_all_volumes(
+    request: Request,
+    db: Session = Depends(get_db),
+    _admin=Depends(require_permission("collections.run")),
+    _csrf=Depends(require_csrf),
+):
+    _audit_collection(
+        db, _admin, "collection.requested", entity="collection", details={"path": request.url.path}
+    )
     check_rate_limit(request)
     try:
         summary = await _run_collect(db, None)
@@ -380,7 +389,16 @@ async def collect_all_volumes(request: Request, db: Session = Depends(get_db)):
 
 
 @router.post("/competition-volume/{competition_id}/collect")
-async def collect_one_volume(request: Request, competition_id: int, db: Session = Depends(get_db)):
+async def collect_one_volume(
+    request: Request,
+    competition_id: int,
+    db: Session = Depends(get_db),
+    _admin=Depends(require_permission("collections.run")),
+    _csrf=Depends(require_csrf),
+):
+    _audit_collection(
+        db, _admin, "collection.requested", entity="collection", details={"path": request.url.path}
+    )
     competition = _get_competition_or_404(db, competition_id)
     check_rate_limit(request)
     try:

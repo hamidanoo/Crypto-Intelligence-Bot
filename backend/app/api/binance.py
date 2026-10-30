@@ -17,6 +17,8 @@ from app.binance.service import (
 from app.cache import cache_get, cache_set
 from app.config import settings
 from app.database import get_db
+from app.api.admin_common import audit as _audit_collection
+from app.auth.dependencies import require_csrf, require_permission
 from app.rate_limit import check_rate_limit
 
 logger = logging.getLogger(__name__)
@@ -230,8 +232,13 @@ async def collect_market(
     request: Request,
     payload: CollectRequest | None = Body(default=None),
     client: BinanceClient = Depends(get_binance_client),
+    _admin=Depends(require_permission("collections.run")),
+    _csrf=Depends(require_csrf),
     db: Session = Depends(get_db),
 ):
+    _audit_collection(
+        db, _admin, "collection.requested", entity="collection", details={"path": request.url.path}
+    )
     check_rate_limit(request)
     chosen = payload.symbols if payload and payload.symbols else settings.tracked_symbol_list
     try:
@@ -251,8 +258,13 @@ async def collect_futures(
     request: Request,
     payload: CollectRequest | None = Body(default=None),
     client: BinanceClient = Depends(get_binance_client),
+    _admin=Depends(require_permission("collections.run")),
+    _csrf=Depends(require_csrf),
     db: Session = Depends(get_db),
 ):
+    _audit_collection(
+        db, _admin, "collection.requested", entity="collection", details={"path": request.url.path}
+    )
     check_rate_limit(request)
     chosen = payload.symbols if payload and payload.symbols else settings.tracked_symbol_list
     try:

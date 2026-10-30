@@ -17,6 +17,8 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.api.admin_common import audit as _audit_collection
+from app.auth.dependencies import require_csrf, require_permission
 from app.marketintel.classification import NEWS_CATEGORIES
 from app.marketintel.service import process_news
 from app.models import CryptoNews, NewsCollectionRun, NewsSource
@@ -219,7 +221,15 @@ async def get_news(request: Request, news_id: int, db: Session = Depends(get_db)
 
 
 @router.post("/news/collect")
-async def collect_news(request: Request, db: Session = Depends(get_db)):
+async def collect_news(
+    request: Request,
+    db: Session = Depends(get_db),
+    _admin=Depends(require_permission("collections.run")),
+    _csrf=Depends(require_csrf),
+):
+    _audit_collection(
+        db, _admin, "collection.requested", entity="collection", details={"path": request.url.path}
+    )
     check_rate_limit(request)
     try:
         result = process_news(db)

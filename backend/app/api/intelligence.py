@@ -7,9 +7,8 @@ announcement collection fails, and 503 on database
 errors. Financial values are serialised as strings, so
 Decimal precision survives JSON encoding.
 
-Manual collection endpoints are not admin-gated in this
-phase (authentication is Phase 8), so they must only be
-exposed behind the deployment's own access controls.
+Manual collection endpoints are gated in Phase 8 by
+the collections.run permission and CSRF protection.
 That limitation is documented in docs/API.md and in the
 Phase 4 module docs, not hidden.
 """
@@ -26,6 +25,8 @@ from sqlalchemy.orm import Session
 from app.announcements.client import AnnouncementAPIError, BinanceAnnouncementClient
 from app.announcements.service import collect_from_source_async, ensure_default_source
 from app.database import get_db
+from app.api.admin_common import audit as _audit_collection
+from app.auth.dependencies import require_csrf, require_permission
 from app.intelligence.allocation import estimate_allocation
 from app.intelligence.processing import (
     process_airdrops,
@@ -279,7 +280,15 @@ async def list_alpha_updates(
 
 
 @router.post("/alpha/collect")
-async def collect_alpha(request: Request, db: Session = Depends(get_db)):
+async def collect_alpha(
+    request: Request,
+    db: Session = Depends(get_db),
+    _admin=Depends(require_permission("collections.run")),
+    _csrf=Depends(require_csrf),
+):
+    _audit_collection(
+        db, _admin, "collection.requested", entity="collection", details={"path": request.url.path}
+    )
     return await _collect_endpoint("ALPHA")(request, db)
 
 
@@ -376,7 +385,15 @@ async def get_airdrop(campaign_id: int, request: Request, db: Session = Depends(
 
 
 @router.post("/airdrops/collect")
-async def collect_airdrops(request: Request, db: Session = Depends(get_db)):
+async def collect_airdrops(
+    request: Request,
+    db: Session = Depends(get_db),
+    _admin=Depends(require_permission("collections.run")),
+    _csrf=Depends(require_csrf),
+):
+    _audit_collection(
+        db, _admin, "collection.requested", entity="collection", details={"path": request.url.path}
+    )
     return await _collect_endpoint("AIRDROP")(request, db)
 
 
@@ -471,7 +488,15 @@ async def get_prime_sale(sale_id: int, request: Request, db: Session = Depends(g
 
 
 @router.post("/prime-sales/collect")
-async def collect_prime_sales(request: Request, db: Session = Depends(get_db)):
+async def collect_prime_sales(
+    request: Request,
+    db: Session = Depends(get_db),
+    _admin=Depends(require_permission("collections.run")),
+    _csrf=Depends(require_csrf),
+):
+    _audit_collection(
+        db, _admin, "collection.requested", entity="collection", details={"path": request.url.path}
+    )
     return await _collect_endpoint("PRIME_SALE")(request, db)
 
 

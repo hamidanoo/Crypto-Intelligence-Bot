@@ -10,9 +10,8 @@ divergence, stated explicitly: routes are /market
 the frontend calls /api/market, which the proxy maps
 to this backend route.
 
-Manual collection is not admin-gated in this phase
-(authentication is Phase 8), so it must only be
-exposed behind the deployment's own access controls.
+Manual collection is gated in Phase 8 by the
+collections.run permission and CSRF protection.
 """
 
 import logging
@@ -27,6 +26,8 @@ from app.binance.client import BinanceAPIError, BinanceClient, validate_symbol
 from app.binance.service import collect_market_snapshots
 from app.config import settings
 from app.database import get_db
+from app.api.admin_common import audit as _audit_collection
+from app.auth.dependencies import require_csrf, require_permission
 from app.marketintel.service import gainers_losers, is_stale, latest_snapshots_by_symbol
 from app.models import MarketAlert, MarketSnapshot, MarketWatchlist
 from app.rate_limit import check_rate_limit
@@ -259,7 +260,13 @@ class WatchlistRequest(BaseModel):
 
 
 @router.post("/market/watchlist")
-async def add_watchlist(request: Request, body: WatchlistRequest, db: Session = Depends(get_db)):
+async def add_watchlist(
+    request: Request,
+    body: WatchlistRequest,
+    db: Session = Depends(get_db),
+    _admin=Depends(require_permission("market.manage")),
+    _csrf=Depends(require_csrf),
+):
     check_rate_limit(request)
     try:
         symbol = validate_symbol(body.symbol)
@@ -284,7 +291,13 @@ async def add_watchlist(request: Request, body: WatchlistRequest, db: Session = 
 
 
 @router.delete("/market/watchlist/{watchlist_id}")
-async def delete_watchlist(request: Request, watchlist_id: int, db: Session = Depends(get_db)):
+async def delete_watchlist(
+    request: Request,
+    watchlist_id: int,
+    db: Session = Depends(get_db),
+    _admin=Depends(require_permission("market.manage")),
+    _csrf=Depends(require_csrf),
+):
     check_rate_limit(request)
     try:
         row = db.query(MarketWatchlist).filter(MarketWatchlist.id == watchlist_id).first()
@@ -365,8 +378,15 @@ async def get_market_symbol(request: Request, symbol: str, db: Session = Depends
 
 @router.post("/market/collect")
 async def collect_market(
-    request: Request, body: dict | None = Body(default=None), db: Session = Depends(get_db)
+    request: Request,
+    body: dict | None = Body(default=None),
+    db: Session = Depends(get_db),
+    _admin=Depends(require_permission("collections.run")),
+    _csrf=Depends(require_csrf),
 ):
+    _audit_collection(
+        db, _admin, "collection.requested", entity="collection", details={"path": request.url.path}
+    )
     check_rate_limit(request)
     symbols = settings.tracked_symbol_list
     if body and isinstance(body.get("symbols"), list) and body["symbols"]:

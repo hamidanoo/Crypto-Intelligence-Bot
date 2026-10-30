@@ -11,6 +11,8 @@ from app.announcements.classifier import CATEGORIES
 from app.announcements.client import AnnouncementAPIError, BinanceAnnouncementClient
 from app.announcements.service import collect_from_source_async, ensure_default_source
 from app.database import get_db
+from app.api.admin_common import audit as _audit_collection
+from app.auth.dependencies import require_csrf, require_permission
 from app.models import Announcement, AnnouncementSource, CollectionRun
 from app.rate_limit import check_rate_limit
 
@@ -245,12 +247,14 @@ async def collect_announcements(
     request: Request,
     payload: CollectRequest | None = Body(default=None),
     db: Session = Depends(get_db),
+    _admin=Depends(require_permission("collections.run")),
+    _csrf=Depends(require_csrf),
 ):
-    """Manual collection. Authentication for admin operations
-    is a Phase 8 feature; in Phase 3 this endpoint is not
-    admin-gated, so it must only be exposed behind the
-    deployment's own access controls. See
-    docs/ANNOUNCEMENT_MONITOR.md."""
+    _audit_collection(
+        db, _admin, "collection.requested", entity="collection", details={"path": request.url.path}
+    )
+    """Manual collection, gated in Phase 8 by the
+    collections.run permission and CSRF protection."""
     check_rate_limit(request)
     try:
         if payload and payload.source_id is not None:
@@ -282,7 +286,16 @@ async def collect_announcements(
 
 
 @router.post("/sources/{source_id}/collect")
-async def collect_source(source_id: int, request: Request, db: Session = Depends(get_db)):
+async def collect_source(
+    source_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    _admin=Depends(require_permission("collections.run")),
+    _csrf=Depends(require_csrf),
+):
+    _audit_collection(
+        db, _admin, "collection.requested", entity="collection", details={"path": request.url.path}
+    )
     check_rate_limit(request)
     source = db.query(AnnouncementSource).filter_by(id=source_id).first()
     if source is None:
@@ -304,6 +317,8 @@ async def patch_source(
     source_id: int,
     request: Request,
     payload: SourcePatchRequest = Body(...),
+    _admin=Depends(require_permission("announcements.manage")),
+    _csrf=Depends(require_csrf),
     db: Session = Depends(get_db),
 ):
     check_rate_limit(request)
