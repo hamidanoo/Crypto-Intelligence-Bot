@@ -664,3 +664,39 @@ performed in this phase.
 - Secrets scan clean. Not verified: PostgreSQL, Redis,
   Docker, Nginx, HTTPS (HTTP-only), live Telegram
   delivery, live Futures data, backup/restore runs.
+
+## Phase 10 — Production Deployment Preparation (Stage A only)
+
+- Verified base: phase-09-integration-security-audit at
+  7619d5c1bf59ee55a1ac3b6ab3827f2f3cf986ea; new branch
+  phase-10-production-deployment created from it.
+- Docker: production hardening (non-root users, private
+  network, Nginx-only public ports, persistent volumes,
+  healthchecks, restart policies, resource limits, capped
+  logging, single scheduler). Docker engine unavailable
+  in this environment, so no build/Compose run is claimed.
+- PostgreSQL/Redis: unavailable here (no docker, psql,
+  postgres, or redis-server; apt sources empty, so no
+  local install was possible). Marked NOT TESTED with
+  exact Stage B commands in the checklist.
+- Nginx/HTTPS: production.conf prepared (TLS 1.2/1.3,
+  redirect, headers, timeouts); HSTS commented out
+  until HTTPS is verified; setup-https.sh prepared.
+  No certificate issued (no domain).
+- Security: TRUSTED_PROXIES handling, SSRF validation
+  for integration test-connections, per-hop RSS
+  revalidation with residual DNS-rebinding window
+  documented, lockout trade-off documented (no CAPTCHA).
+- Scripts: deploy, backup, restore, health-check,
+  production-check, setup-https — all bash -n valid.
+  Restore refusal logic tested; no real restore drill
+  (no PostgreSQL).
+- Tests: full suite run in Stage A verification (see
+  Phase 10 report for the final count); no test deleted
+  or weakened. One genuine test-found bug fixed: SSRF
+  fetch_feed constructed the HTTP client before its
+  first validation (now validated before construction
+  and re-validated per hop).
+- CI workflow corrected locally; it cannot be pushed
+  via the GitHub App (403) and no Actions run is
+  claimed. Stage B (live VPS/domain) NOT started.

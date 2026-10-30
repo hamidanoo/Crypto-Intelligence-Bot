@@ -1,5 +1,38 @@
 # Changelog
 
+## Phase 10 — Production Deployment Preparation (Stage A only)
+
+- Harden Docker production configuration: non-root
+  backend/frontend users, private named network,
+  only Nginx on public 80/443, localhost-bound
+  internal services, persistent volumes, healthchecks,
+  restart policies, resource limits, capped logging,
+  and a single-scheduler guarantee.
+- Add Nginx production config (TLS 1.2/1.3, secure
+  ciphers, security headers, HTTP→HTTPS redirect)
+  with HSTS commented out until HTTPS is verified,
+  plus scripts/setup-https.sh (Let's Encrypt webroot
+  issuance, HTTPS verification, then HSTS, renewal).
+- Add scripts/deploy.sh, backup.sh, restore.sh,
+  health-check.sh, and production-check.sh (all
+  `bash -n` validated; restore refuses production
+  overwrite by default).
+- Add trusted-proxy handling (TRUSTED_PROXIES,
+  empty by default) and SSRF validation for
+  integration test-connections; document the
+  residual RSS DNS-rebinding window and the
+  account-lockout trade-off honestly.
+- Correct the CI workflow (backend, frontend,
+  migration validation, safe config checks) — it
+  remains local-only until manually installed, and
+  no GitHub Actions run is claimed.
+- Add docs/PRODUCTION_DEPLOYMENT_GUIDE.md and
+  docs/PRODUCTION_CHECKLIST.md. Stage B (live VPS,
+  domain, HTTPS, Docker/PostgreSQL/Redis
+  verification, restore drill, live Telegram/
+  Binance checks) is NOT started and is pending
+  real infrastructure details.
+
 ## Phase 9 — Complete System Audit, Integration Testing & Security Hardening
 
 - Audit the full system (backend, frontend, database,

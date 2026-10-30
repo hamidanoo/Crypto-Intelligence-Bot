@@ -49,3 +49,17 @@ database password) in production.
   `docs/PHASE_09_AUDIT_REPORT.md` §6–§7 for the exact
   commands. Do not run a second backend instance without
   a distributed scheduler lock.
+
+## Phase 10 deployment notes (Stage A)
+
+Production deployment preparation is complete in
+docs/PRODUCTION_DEPLOYMENT_GUIDE.md and
+docs/PRODUCTION_CHECKLIST.md (Stage A only). The
+Phase 1 steps above are superseded by that guide:
+use scripts/production-check.sh, then
+scripts/deploy.sh, then scripts/setup-https.sh
+(after DNS points a real domain at the VPS).
+Do not serve production traffic through the
+HTTP-only Nginx config, and do not claim Stage B
+complete until the checklist's go-live gate passes
+on real infrastructure.

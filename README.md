@@ -9,16 +9,20 @@ wallet signing.
 
 ## Current status
 
-Phase 9 — Complete System Audit, Integration Testing &
-Security Hardening is complete on branch
-`phase-09-integration-security-audit`. See
+Phase 10 — Production Deployment Preparation (Stage A
+only) is complete on branch
+`phase-10-production-deployment`. See
 `PROJECT_STATUS.md` for the current phase, test
-results, and limitations, and
-`docs/PHASE_09_AUDIT_REPORT.md` for the audit findings,
-the production-readiness assessment, and what is still
-NOT VERIFIED (PostgreSQL, Redis, Docker, Nginx, HTTPS,
-live Telegram delivery, live Futures data, backup/restore).
-Nothing has been merged into `main`.
+results, and limitations,
+`docs/PRODUCTION_DEPLOYMENT_GUIDE.md` and
+`docs/PRODUCTION_CHECKLIST.md` for the deployment
+package, and `docs/PHASE_09_AUDIT_REPORT.md` for the
+audit findings. Stage B (live VPS, domain, HTTPS,
+Docker/PostgreSQL/Redis verification, restore drill,
+live Telegram delivery, live Futures data) has NOT
+started: there is currently no VPS, domain, or
+production DNS record. Nothing has been merged into
+`main`.
 
 ## Architecture
 

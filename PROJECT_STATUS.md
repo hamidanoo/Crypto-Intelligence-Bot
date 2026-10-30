@@ -1,9 +1,39 @@
 # Project Status
 
-- **Current phase:** Phase 9 — Complete System Audit, Integration Testing & Security Hardening
-- **Current branch:** `phase-09-integration-security-audit`, created from `phase-08-admin-dashboard-security` at `aa33ba8d7731f0b4bb3b9e459dd4c39dd08a6da8` (verified remotely before creation)
-- **Latest commit:** See the Phase 9 audit report for the verified branch head and each Phase 9 commit hash. This file follows the established pattern: a status file cannot contain its own commit hash, so the head commit is reported alongside this file, not inside it.
+- **Current phase:** Phase 10 — Production Deployment Preparation (Stage A only; Stage B live deployment NOT started)
+- **Current branch:** `phase-10-production-deployment`, created from `phase-09-integration-security-audit` at `7619d5c1bf59ee55a1ac3b6ab3827f2f3cf986ea` (verified remotely before creation)
+- **Latest commit:** `64bd7b7a2f7197ebd8d611b7591cee031d6fdc60` "Harden SSRF and trusted proxy handling" (the main Phase 10 code commit; this status file follows the established pattern, so the docs/status commit that heads the branch is reported alongside this file, not inside it).
 - **Merged into main:** No. Merging requires explicit approval.
+
+## Completed features (Phase 10, Stage A)
+
+- Deployment preparation only: Docker production
+  hardening (non-root users, named private network,
+  only Nginx on public 80/443, localhost-bound
+  internal services, persistent volumes, healthchecks,
+  restart policies, resource limits, capped logging,
+  single-scheduler guarantee), Nginx production
+  config with TLS 1.2/1.3 and a commented HSTS block
+  (enabled only after HTTPS is verified), Let's
+  Encrypt setup/renewal script, deploy/backup/
+  restore/health-check/production-check scripts
+  (all `bash -n` validated), trusted-proxy handling
+  (TRUSTED_PROXIES, empty by default), SSRF
+  validation for integration test-connections,
+  per-hop RSS SSRF revalidation with an honestly
+  documented residual DNS-rebinding window, CI
+  workflow corrected (local-only until manually
+  installed; no GitHub Actions run claimed), and
+  `docs/PRODUCTION_DEPLOYMENT_GUIDE.md` plus
+  `docs/PRODUCTION_CHECKLIST.md`.
+- NOT done in Stage A (Stage B, requires real VPS
+  and domain): Docker build/Compose run, PostgreSQL
+  and Redis verification, HTTPS certificate
+  issuance and verification, live Telegram delivery,
+  live Binance verification, backup/restore drill,
+  CI run. Docker, PostgreSQL, and Redis were
+  unavailable in the Stage A environment; see the
+  Phase 10 report for exact limitations and commands.
 
 ## Completed features (Phase 9)
 
