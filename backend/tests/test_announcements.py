@@ -22,6 +22,68 @@ from app.rate_limit import reset_rate_limits
 from app.scheduler import register_jobs, scheduler
 
 
+def _auth(client, db):
+    """Seed a super-admin and log in; returns CSRF headers.
+
+    Phase 8 adaptation only: earlier tests called collect
+    endpoints unauthenticated. Every original assertion is
+    preserved; only authentication is added.
+    """
+    from app.auth.dependencies import reset_login_rate_limits
+    from app.auth.passwords import hash_password
+    from app.auth.permissions import PERMISSIONS, ROLE_PERMISSIONS
+    from app.models import (
+        AdminPermission,
+        AdminRole,
+        AdminRolePermission,
+        AdminUser,
+        AdminUserRole,
+    )
+
+    reset_login_rate_limits()
+    for name in ROLE_PERMISSIONS:
+        if not db.query(AdminRole).filter(AdminRole.name == name).first():
+            db.add(AdminRole(name=name))
+    db.commit()
+    for key in PERMISSIONS:
+        if not db.query(AdminPermission).filter(AdminPermission.key == key).first():
+            db.add(AdminPermission(key=key))
+    db.commit()
+    roles = {r.name: r.id for r in db.query(AdminRole).all()}
+    perms = {p.key: p.id for p in db.query(AdminPermission).all()}
+    for role, keys in ROLE_PERMISSIONS.items():
+        for k in keys:
+            if (
+                not db.query(AdminRolePermission)
+                .filter(
+                    AdminRolePermission.role_id == roles[role],
+                    AdminRolePermission.permission_id == perms[k],
+                )
+                .first()
+            ):
+                db.add(AdminRolePermission(role_id=roles[role], permission_id=perms[k]))
+    db.commit()
+    user = db.query(AdminUser).filter(AdminUser.username == "phase8-admin").first()
+    if user is None:
+        user = AdminUser(
+            username="phase8-admin",
+            email="phase8-admin@example.invalid",
+            password_hash=hash_password("Password123"),
+            role="super_admin",
+            is_superuser=True,
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        db.add(AdminUserRole(admin_user_id=user.id, role_id=roles["super_admin"]))
+        db.commit()
+    response = client.post(
+        "/auth/login", json={"username": "phase8-admin", "password": "Password123"}
+    )
+    assert response.status_code == 200, response.text
+    return {"X-CSRF-Token": response.cookies.get("admin_csrf")}
+
+
 def _engine():
     engine = create_engine(
         "sqlite:///:memory:",
@@ -265,6 +327,7 @@ def test_api_pagination_filtering_and_manual_collect():
     try:
         reset_rate_limits()
         client = TestClient(app, raise_server_exceptions=False)
+        headers = _auth(client, db)
         # Seed via the service directly, then test the API.
         source = ensure_default_source(db)
         asyncio.run(collect_from_source_async(db, source, _mock_client()))
@@ -289,11 +352,15 @@ def test_api_pagination_filtering_and_manual_collect():
         response = client.get("/announcements/999999")
         assert response.status_code == 404
         response = client.patch(
-            f"/announcements/sources/{source.id}", json={"polling_interval_seconds": 600}
+            f"/announcements/sources/{source.id}",
+            json={"polling_interval_seconds": 600},
+            headers=headers,
         )
         assert response.status_code == 200
         assert response.json()["polling_interval_seconds"] == 600
-        response = client.patch("/announcements/sources/999999", json={"enabled": False})
+        response = client.patch(
+            "/announcements/sources/999999", json={"enabled": False}, headers=headers
+        )
         assert response.status_code == 404
         # Manual collection endpoint, with the CMS client patched
         # to a mock transport so no live network is required.
@@ -304,11 +371,13 @@ def test_api_pagination_filtering_and_manual_collect():
         with patch.object(
             announcements_api, "BinanceAnnouncementClient", return_value=_mock_client()
         ):
-            response = client.post("/announcements/collect", json={})
+            response = client.post("/announcements/collect", json={}, headers=headers)
             assert response.status_code == 200
             # Second manual collect: all items are duplicates.
             assert response.json()["duplicates_skipped"] == 2
-            response = client.post(f"/announcements/sources/{source.id}/collect", json={})
+            response = client.post(
+                f"/announcements/sources/{source.id}/collect", json={}, headers=headers
+            )
             assert response.status_code == 200
     finally:
         if old_db is None:

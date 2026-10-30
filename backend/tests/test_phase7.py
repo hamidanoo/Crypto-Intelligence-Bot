@@ -156,15 +156,74 @@ def _client_with_db(db):
     return TestClient(app, raise_server_exceptions=False), old
 
 
+def _auth(client, db):
+    """Seed a super-admin and log in; returns CSRF headers.
+
+    Phase 8 adaptation only: earlier tests called collect
+    endpoints unauthenticated. Every original assertion is
+    preserved; only authentication is added.
+    """
+    from app.auth.dependencies import reset_login_rate_limits
+    from app.auth.passwords import hash_password
+    from app.auth.permissions import PERMISSIONS, ROLE_PERMISSIONS
+    from app.models import (
+        AdminPermission,
+        AdminRole,
+        AdminRolePermission,
+        AdminUser,
+        AdminUserRole,
+    )
+
+    reset_login_rate_limits()
+    for name in ROLE_PERMISSIONS:
+        if not db.query(AdminRole).filter(AdminRole.name == name).first():
+            db.add(AdminRole(name=name))
+    db.commit()
+    for key in PERMISSIONS:
+        if not db.query(AdminPermission).filter(AdminPermission.key == key).first():
+            db.add(AdminPermission(key=key))
+    db.commit()
+    roles = {r.name: r.id for r in db.query(AdminRole).all()}
+    perms = {p.key: p.id for p in db.query(AdminPermission).all()}
+    for role, keys in ROLE_PERMISSIONS.items():
+        for k in keys:
+            if (
+                not db.query(AdminRolePermission)
+                .filter(
+                    AdminRolePermission.role_id == roles[role],
+                    AdminRolePermission.permission_id == perms[k],
+                )
+                .first()
+            ):
+                db.add(AdminRolePermission(role_id=roles[role], permission_id=perms[k]))
+    db.commit()
+    user = db.query(AdminUser).filter(AdminUser.username == "phase8-admin").first()
+    if user is None:
+        user = AdminUser(
+            username="phase8-admin",
+            email="phase8-admin@example.invalid",
+            password_hash=hash_password("Password123"),
+            role="super_admin",
+            is_superuser=True,
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        db.add(AdminUserRole(admin_user_id=user.id, role_id=roles["super_admin"]))
+        db.commit()
+    response = client.post(
+        "/auth/login", json={"username": "phase8-admin", "password": "Password123"}
+    )
+    assert response.status_code == 200, response.text
+    return {"X-CSRF-Token": response.cookies.get("admin_csrf")}
+
+
 def _restore(old):
     if old is None:
         app.dependency_overrides.pop(get_db, None)
     else:
         app.dependency_overrides[get_db] = old
     reset_rate_limits()
-
-
-# Market parsing / sorting ------------------------------------------------
 
 
 def test_parse_ticker_decimal():
@@ -558,18 +617,21 @@ def test_market_api_overview_gainers_watchlist_alerts():
 def test_watchlist_crud_and_duplicate():
     db = _db()
     client, old = _client_with_db(db)
+    headers = _auth(client, db)
     try:
-        created = client.post("/market/watchlist", json={"symbol": "btcusdt", "note": "main"})
+        created = client.post(
+            "/market/watchlist", json={"symbol": "btcusdt", "note": "main"}, headers=headers
+        )
         assert created.status_code == 200
         assert created.json()["symbol"] == "BTCUSDT"
-        duplicate = client.post("/market/watchlist", json={"symbol": "BTCUSDT"})
+        duplicate = client.post("/market/watchlist", json={"symbol": "BTCUSDT"}, headers=headers)
         assert duplicate.json()["already_exists"] is True
-        bad = client.post("/market/watchlist", json={"symbol": "bad!"})
+        bad = client.post("/market/watchlist", json={"symbol": "bad!"}, headers=headers)
         assert bad.status_code == 400
         watch_id = created.json()["id"]
-        deleted = client.delete(f"/market/watchlist/{watch_id}")
+        deleted = client.delete(f"/market/watchlist/{watch_id}", headers=headers)
         assert deleted.status_code == 200
-        missing = client.delete("/market/watchlist/9999")
+        missing = client.delete("/market/watchlist/9999", headers=headers)
         assert missing.status_code == 404
     finally:
         _restore(old)
@@ -603,6 +665,7 @@ def test_news_api_filters_and_summary_marker():
 def test_market_collect_and_futures_collect_endpoints():
     db = _db()
     client, old = _client_with_db(db)
+    headers = _auth(client, db)
     try:
         # Live Binance is not required: with no network
         # mock, collection against the real client is
@@ -610,7 +673,7 @@ def test_market_collect_and_futures_collect_endpoints():
         # covered by service tests and the DB-failure
         # test below. This test only checks routing
         # does not crash on a missing symbol list.
-        response = client.post("/market/collect", json={"symbols": ["bad!"]})
+        response = client.post("/market/collect", json={"symbols": ["bad!"]}, headers=headers)
         assert response.status_code == 400
     finally:
         _restore(old)

@@ -22,8 +22,20 @@ from app.scheduler import scheduler, shutdown_scheduler, start_scheduler
 def test_production_secret_validation():
     with pytest.raises(ValueError):
         Settings(environment="production", secret_key="change-me-in-production")
-    settings = Settings(environment="production", secret_key="a-real-secret-value")
+    # Phase 8: production also requires a credential
+    # encryption key. The test key below is a dummy
+    # 32-byte value used only for this validation test.
+    import base64
+
+    test_key = base64.b64encode(b"\x00" * 32).decode("ascii")
+    settings = Settings(
+        environment="production",
+        secret_key="a-real-secret-value",
+        credential_encryption_key=test_key,
+    )
     assert settings.secret_key == "a-real-secret-value"
+    with pytest.raises(ValueError):
+        Settings(environment="production", secret_key="a-real-secret-value")
 
 
 def test_scheduler_lifecycle():
@@ -120,7 +132,7 @@ def test_retry_succeeds_after_429():
 
 def test_decimal_snapshot_storage():
     engine = create_engine("sqlite:///:memory:")
-    Base.metadata.create_all(engine, tables=[MarketSnapshot.__table__])
+    Base.metadata.create_all(engine)
     Session = sessionmaker(bind=engine)
     db = Session()
 
@@ -141,6 +153,68 @@ def test_decimal_snapshot_storage():
     snapshots = asyncio.run(collect_market_snapshots(db, FakeClient(), ["BTCUSDT"]))
     assert isinstance(snapshots[0].price, Decimal)
     assert db.query(MarketSnapshot).first().price == Decimal("0.12345679")
+
+
+def _auth(client, db):
+    """Seed a super-admin and log in; returns CSRF headers.
+
+    Phase 8 adaptation only: earlier tests called collect
+    endpoints unauthenticated. Every original assertion is
+    preserved; only authentication is added.
+    """
+    from app.auth.dependencies import reset_login_rate_limits
+    from app.auth.passwords import hash_password
+    from app.auth.permissions import PERMISSIONS, ROLE_PERMISSIONS
+    from app.models import (
+        AdminPermission,
+        AdminRole,
+        AdminRolePermission,
+        AdminUser,
+        AdminUserRole,
+    )
+
+    reset_login_rate_limits()
+    for name in ROLE_PERMISSIONS:
+        if not db.query(AdminRole).filter(AdminRole.name == name).first():
+            db.add(AdminRole(name=name))
+    db.commit()
+    for key in PERMISSIONS:
+        if not db.query(AdminPermission).filter(AdminPermission.key == key).first():
+            db.add(AdminPermission(key=key))
+    db.commit()
+    roles = {r.name: r.id for r in db.query(AdminRole).all()}
+    perms = {p.key: p.id for p in db.query(AdminPermission).all()}
+    for role, keys in ROLE_PERMISSIONS.items():
+        for k in keys:
+            if (
+                not db.query(AdminRolePermission)
+                .filter(
+                    AdminRolePermission.role_id == roles[role],
+                    AdminRolePermission.permission_id == perms[k],
+                )
+                .first()
+            ):
+                db.add(AdminRolePermission(role_id=roles[role], permission_id=perms[k]))
+    db.commit()
+    user = db.query(AdminUser).filter(AdminUser.username == "phase8-admin").first()
+    if user is None:
+        user = AdminUser(
+            username="phase8-admin",
+            email="phase8-admin@example.invalid",
+            password_hash=hash_password("Password123"),
+            role="super_admin",
+            is_superuser=True,
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        db.add(AdminUserRole(admin_user_id=user.id, role_id=roles["super_admin"]))
+        db.commit()
+    response = client.post(
+        "/auth/login", json={"username": "phase8-admin", "password": "Password123"}
+    )
+    assert response.status_code == 200, response.text
+    return {"X-CSRF-Token": response.cookies.get("admin_csrf")}
 
 
 def test_cache_fallback_when_redis_unavailable():
@@ -192,7 +266,7 @@ def test_collect_endpoint_accepts_json_body_and_rejects_too_many_symbols():
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
-    Base.metadata.create_all(engine, tables=[MarketSnapshot.__table__])
+    Base.metadata.create_all(engine)
     db = sessionmaker(bind=engine)()
 
     with pytest.raises(ValueError):
@@ -208,7 +282,10 @@ def test_collect_endpoint_accepts_json_body_and_rejects_too_many_symbols():
     try:
         reset_rate_limits()
         client = TestClient(app, raise_server_exceptions=False)
-        response = client.post("/binance/collect/market", json={"symbols": ["BTCUSDT"]})
+        headers = _auth(client, db)
+        response = client.post(
+            "/binance/collect/market", json={"symbols": ["BTCUSDT"]}, headers=headers
+        )
         assert response.status_code == 200
         assert response.json()["collected"] == 1
     finally:

@@ -165,6 +165,68 @@ def _client_with_db(db):
     return TestClient(app, raise_server_exceptions=False), old
 
 
+def _auth(client, db):
+    """Seed a super-admin and log in; returns CSRF headers.
+
+    Phase 8 adaptation only: earlier tests called collect
+    endpoints unauthenticated. Every original assertion is
+    preserved; only authentication is added.
+    """
+    from app.auth.dependencies import reset_login_rate_limits
+    from app.auth.passwords import hash_password
+    from app.auth.permissions import PERMISSIONS, ROLE_PERMISSIONS
+    from app.models import (
+        AdminPermission,
+        AdminRole,
+        AdminRolePermission,
+        AdminUser,
+        AdminUserRole,
+    )
+
+    reset_login_rate_limits()
+    for name in ROLE_PERMISSIONS:
+        if not db.query(AdminRole).filter(AdminRole.name == name).first():
+            db.add(AdminRole(name=name))
+    db.commit()
+    for key in PERMISSIONS:
+        if not db.query(AdminPermission).filter(AdminPermission.key == key).first():
+            db.add(AdminPermission(key=key))
+    db.commit()
+    roles = {r.name: r.id for r in db.query(AdminRole).all()}
+    perms = {p.key: p.id for p in db.query(AdminPermission).all()}
+    for role, keys in ROLE_PERMISSIONS.items():
+        for k in keys:
+            if (
+                not db.query(AdminRolePermission)
+                .filter(
+                    AdminRolePermission.role_id == roles[role],
+                    AdminRolePermission.permission_id == perms[k],
+                )
+                .first()
+            ):
+                db.add(AdminRolePermission(role_id=roles[role], permission_id=perms[k]))
+    db.commit()
+    user = db.query(AdminUser).filter(AdminUser.username == "phase8-admin").first()
+    if user is None:
+        user = AdminUser(
+            username="phase8-admin",
+            email="phase8-admin@example.invalid",
+            password_hash=hash_password("Password123"),
+            role="super_admin",
+            is_superuser=True,
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        db.add(AdminUserRole(admin_user_id=user.id, role_id=roles["super_admin"]))
+        db.commit()
+    response = client.post(
+        "/auth/login", json={"username": "phase8-admin", "password": "Password123"}
+    )
+    assert response.status_code == 200, response.text
+    return {"X-CSRF-Token": response.cookies.get("admin_csrf")}
+
+
 def _restore(old):
     if old is None:
         app.dependency_overrides.pop(get_db, None)
@@ -954,7 +1016,9 @@ def test_api_collect_endpoints_with_mocked_client_and_502():
                 super().__init__(trades)
 
         with patch("app.api.volume.BinanceClient", _PatchedClient):
-            response = client.post(f"/competition-volume/{comp.id}/collect")
+            response = client.post(
+                f"/competition-volume/{comp.id}/collect", headers=_auth(client, db)
+            )
         assert response.status_code == 200
         assert response.json()["intervals_created"] >= 1
         assert (
@@ -976,9 +1040,14 @@ def test_api_collect_endpoints_with_mocked_client_and_502():
         db.query(CompetitionVolumeInterval).delete()
         db.commit()
         with patch("app.api.volume.BinanceClient", _FailingClient):
-            response = client.post(f"/competition-volume/{comp.id}/collect")
+            response = client.post(
+                f"/competition-volume/{comp.id}/collect", headers=_auth(client, db)
+            )
         assert response.status_code == 502
-        assert client.post("/competition-volume/99999/collect").status_code == 404
+        assert (
+            client.post("/competition-volume/99999/collect", headers=_auth(client, db)).status_code
+            == 404
+        )
     finally:
         _restore(old)
 
