@@ -81,3 +81,11 @@ environment, install `requirements.txt`, and start it with
 - `docs/WINDOWS_SETUP.md`, `docs/VPS_DEPLOYMENT.md`,
   `docs/BACKUP_RESTORE.md`, `docs/SECURITY.md`,
   `docs/TROUBLESHOOTING.md`
+
+## Phase 8 — Admin Dashboard & Security
+
+See docs/ADMIN_DASHBOARD.md, docs/ADMIN_SETUP.md,
+docs/RBAC.md, and docs/CREDENTIAL_ENCRYPTION.md.
+First administrator: backend/scripts/create_admin.py
+with ADMIN_BOOTSTRAP_USERNAME and
+ADMIN_BOOTSTRAP_PASSWORD from the environment.

@@ -85,3 +85,18 @@ Phase 8 adds dashboard pages and authentication, Phase 9 tests and
 hardens the whole system, and Phase 10 prepares VPS deployment.
 No phase introduces a new service without recording the decision
 in `docs/DEVELOPMENT_LOG.md`.
+
+## Phase 8 security layer
+
+Authentication lives in `backend/app/auth/`
+(passwords, sessions, permissions, encryption, audit,
+dependencies, SSRF) and is enforced by FastAPI
+dependencies on the routers in `backend/app/api/`
+(auth, admin, admin_ops). The frontend under
+`frontend/app/admin/` and `frontend/app/login/` talks
+to the backend only through the `/api` proxy with
+`credentials: "include"` and a CSRF header read from
+the CSRF cookie. No auth token is stored in
+localStorage or sessionStorage. Scheduler control goes
+through the existing single APScheduler instance with
+a server-side job-id allowlist.

@@ -1,5 +1,35 @@
 # Changelog
 
+## Phase 8 — Professional Admin Dashboard & Security
+
+- Add administrator authentication and sessions:
+  server-side sessions (HttpOnly cookie + CSRF token),
+  Argon2id passwords, login lockout and rate limiting,
+  session rotation/revocation, password change and
+  single-use reset, and scripts/create_admin.py
+  bootstrap with no default password.
+- Add granular RBAC: admin_roles, admin_permissions,
+  admin_role_permissions, admin_user_roles, seeded with
+  4 roles and 32 permissions, enforced at the API layer
+  with privilege-escalation and last-Super-Admin guards.
+- Protect every manual collection endpoint (Phases 3-7)
+  with collections.run plus CSRF; adapt earlier tests
+  to authenticate without weakening assertions.
+- Add AES-GCM credential encryption at rest for API
+  integrations, masked responses, and key rotation.
+- Add admin dashboard API (overview, activity, health,
+  users, roles, Telegram, integrations, notifications,
+  scheduler, audit logs, system settings, news sources)
+  and a full Next.js admin frontend (login, reset,
+  18 permission-filtered sections, real data only).
+- Add migration 0009 (admin sessions, roles,
+  permissions, reset tokens, login throttling fields,
+  encrypted credential columns, audit extensions)
+  with a verified SQLite upgrade/downgrade chain.
+- Add RSS SSRF protection for news-source testing
+  (scheme, resolved-IP, redirect revalidation, size
+  and timeout limits) and security response headers.
+
 ## Phase 7 — Market, Futures & News Intelligence
 
 - Add market, futures, and news models and

@@ -1,9 +1,43 @@
 # Project Status
 
-- **Current phase:** Phase 7 — Market, Futures & News Intelligence
-- **Current branch:** `phase-07-market-futures-news`, created from `phase-06-volume-tracker` at `6d2a49798831057e6d230801d180693c32870dd9` (verified remotely before creation)
-- **Latest commit:** See the Phase 7 report for the verified branch head and each Phase 7 commit hash. This file follows the established pattern: a status file cannot contain its own commit hash, so the head commit is reported alongside this file, not inside it.
+- **Current phase:** Phase 8 — Professional Admin Dashboard & Security
+- **Current branch:** `phase-08-admin-dashboard-security`, created from `phase-07-market-futures-news` at `49b208cdb09c4a653cca7e884d1d87020c0fcad9` (verified remotely before creation)
+- **Latest commit:** See the Phase 8 report for the verified branch head and each Phase 8 commit hash. This file follows the established pattern: a status file cannot contain its own commit hash, so the head commit is reported alongside this file, not inside it.
 - **Merged into main:** No. Merging requires explicit approval.
+
+## Completed features (Phase 8)
+
+- Administrator authentication: server-side sessions
+  (HttpOnly cookie + CSRF token), Argon2id passwords,
+  login lockout and rate limiting, session rotation
+  and revocation, password change and single-use
+  reset, and a CLI bootstrap script with no default
+  password (see docs/ADMIN_SETUP.md).
+- Granular RBAC with four roles (Super Admin, Admin,
+  Operator, Viewer) and 32 permissions enforced at the
+  API layer, with privilege-escalation guards and
+  last-Super-Admin protection (see docs/RBAC.md).
+- Every manual collection endpoint from Phases 3-7 is
+  now gated by `collections.run` plus CSRF; earlier
+  tests were adapted to authenticate (assertions
+  preserved) and new tests prove 401/403 denial.
+- Credential encryption at rest: AES-GCM with a key
+  from the environment, masked responses, rotation via
+  a previous key, and clear failure when the key is
+  missing or invalid (see docs/CREDENTIAL_ENCRYPTION.md).
+- Admin dashboard: login, password reset, and
+  permission-filtered sidebar with 18 sections, real
+  overview/activity/health data, user and role
+  management, Telegram and integration management,
+  notification settings, scheduler controls
+  (allowlisted job ids only), audit logs (append-only),
+  system settings, and news-source management with
+  SSRF protection. No fake data, no decorative
+  controls, no tokens in localStorage.
+- Migration 0009 with a verified upgrade/downgrade
+  chain on SQLite. Live PostgreSQL migration 0009,
+  Docker run, live Telegram delivery, and a production
+  scheduler run are not verified.
 
 ## Completed features (Phase 7)
 

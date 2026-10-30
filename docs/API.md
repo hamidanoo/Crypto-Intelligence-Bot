@@ -229,3 +229,66 @@ volume analytics, market, futures, news,
 listings, Telegram settings, integrations, scheduler
 control, audit logs, and system health. Those routes
 are documented here as they are added, not in advance.
+
+## Phase 8 endpoints
+
+Authentication is session-based (see docs/ADMIN_SETUP.md).
+All `/admin/*` endpoints require a session cookie plus,
+for state-changing requests, the `X-CSRF-Token` header.
+Unauthenticated requests return 401, unauthorised
+requests return 403, and failed authorisation attempts
+are audited.
+
+### Authentication
+
+- `POST /auth/login` — username + password, sets
+  HttpOnly session cookie and CSRF cookie.
+- `POST /auth/logout` — revokes the session, clears cookies.
+- `GET /auth/me` — current administrator and permissions.
+- `POST /auth/refresh` — rotates the session token.
+- `POST /auth/change-password` — requires the current password.
+- `POST /auth/forgot-password` — always the same generic
+  response (no account enumeration).
+- `POST /auth/reset-password` — single-use, 60-minute token.
+
+### Administration
+
+- `GET /admin/dashboard/overview`, `/admin/dashboard/activity`,
+  `/admin/dashboard/health` — real aggregated data and
+  actual service checks (dashboard.view).
+- `GET/POST /admin/users`, `GET/PATCH /admin/users/{id}`,
+  `POST /admin/users/{id}/deactivate` (users.view / users.manage).
+- `GET/POST/PATCH /admin/roles`, `GET /admin/permissions`
+  (roles.view / roles.manage).
+- `GET/PATCH /admin/telegram`, `POST /admin/telegram/test-message`
+  (telegram.view / telegram.manage). Test messages are
+  sent only on explicit request.
+- `GET/POST/PATCH /admin/integrations`,
+  `POST /admin/integrations/{id}/test-connection`
+  (integrations.view / integrations.manage). Responses
+  are masked; secrets are AES-GCM encrypted at rest.
+- `GET/PATCH /admin/notifications`,
+  `GET /admin/notifications/history`
+  (notifications.view / notifications.manage).
+- `GET /admin/scheduler`,
+  `POST /admin/scheduler/{id}/pause|resume|trigger`
+  (scheduler.view / scheduler.manage / scheduler.trigger).
+  Job ids are validated against a server-side allowlist.
+- `GET /admin/audit-logs` — paginated, filterable
+  (audit.view). No update or delete endpoint exists.
+- `GET/PATCH /admin/system-settings`
+  (settings.view / settings.manage).
+- `GET/POST/PATCH /admin/news-sources`,
+  `POST /admin/news-sources/{id}/test`
+  (news_sources.view / news_sources.manage). Feed tests
+  apply SSRF protection (see docs/ADMIN_DASHBOARD.md).
+
+### Protected collection endpoints (Phase 8 change)
+
+Every manual collection endpoint from Phases 3-7 now
+requires `collections.run` plus CSRF; see docs/RBAC.md
+for the full list. `PATCH /announcements/sources/{id}`
+requires announcements.manage, and market watchlist
+writes require market.manage. `POST
+/prime-sales/estimate-allocation` remains public: it is
+a pure calculation from caller-supplied inputs.

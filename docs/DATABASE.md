@@ -177,3 +177,25 @@
     for prices and `futures_snapshots` for funding,
     next funding time, mark price, and open
     interest.
+
+- Phase 8 tables (migration `0009`):
+  - `admin_roles`, `admin_permissions`,
+    `admin_role_permissions`, `admin_user_roles` —
+    granular RBAC, seeded idempotently with 4 roles
+    and 32 permissions (83 role-permission links).
+  - `admin_sessions` — SHA-256 session token hash,
+    CSRF token, created/expires/last-seen/revoked
+    timestamps, IP, user agent.
+  - `password_reset_tokens` — hashed single-use
+    tokens with expiry and used timestamp.
+  - Extended `admin_users` — `failed_login_attempts`,
+    `locked_until`.
+  - Extended `api_integrations` — `encrypted_secret`,
+    `encrypted_nonce`, `encryption_key_id` (AES-GCM).
+  - Extended `audit_logs` — `correlation_id`,
+    `ip_address`, `outcome`.
+  - Downgrade 0009 -> 0008 drops the new tables and
+    columns in reverse order; the full chain was
+    verified on SQLite (upgrade to 0009, downgrade to
+    0008, re-upgrade to 0009). PostgreSQL-specific
+    behaviour beyond SQLite was not validated locally.

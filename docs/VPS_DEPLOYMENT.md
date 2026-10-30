@@ -18,3 +18,19 @@ Planned production steps (Phase 10):
 
 Do not use the Phase 1 development defaults (`SECRET_KEY`,
 database password) in production.
+
+## Phase 8 deployment notes
+
+- Set `ENVIRONMENT=production`, a real `SECRET_KEY`,
+  and `CREDENTIAL_ENCRYPTION_KEY` (base64, 32 bytes);
+  production startup fails without the last two.
+- Create the first administrator on the server with
+  `backend/scripts/create_admin.py` (see
+  docs/ADMIN_SETUP.md); do not bake credentials into
+  images or compose files.
+- Serve the frontend and backend behind Nginx with
+  the existing proxy; admin cookies require HTTPS in
+  production for the Secure flag to apply.
+- Live PostgreSQL migration 0009, Docker run, live
+  Telegram delivery, and a production scheduler run
+  are not yet verified for Phase 8.

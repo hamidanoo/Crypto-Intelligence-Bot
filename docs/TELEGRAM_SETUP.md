@@ -23,3 +23,14 @@ start polling, instead of crashing in a restart loop.
 The bot never executes trades or withdrawals. It publishes
 intelligence and accepts read-only commands, with administrative
 commands restricted to authorised administrators in later phases.
+
+## Admin Telegram management (Phase 8)
+
+Administrators with telegram.manage can view and edit
+Telegram configuration at `/admin/telegram`: group id
+and title, notification enable/disable, and category
+settings. The bot token itself is never returned by
+the API and never shown in the UI; only its presence
+is reported. The test-message button sends only when
+explicitly clicked and only when a token and group
+are configured.

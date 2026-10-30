@@ -600,3 +600,37 @@ performed in this phase.
   allowed location, any RSS publisher feed.
   Manual collect remains ungated until Phase 8
   auth. Phase 8 NOT started.
+
+## Phase 8 — Professional Admin Dashboard & Security
+
+- Branch phase-08-admin-dashboard-security from
+  phase-07-market-futures-news at 49b208cd (verified
+  remotely before creation). No merge into main.
+- Auth: server-side sessions, Argon2id (argon2-cffi
+  added to requirements; it was not previously
+  installed), CSRF, lockout, rotation, reset.
+- RBAC: 32 permissions, 4 roles, API-layer enforcement.
+- All Phase 3-7 manual collection endpoints gated by
+  collections.run plus CSRF. Earlier tests adapted to
+  authenticate via a seeded Super Admin helper; every
+  original assertion preserved. One Phase 1 test was
+  also updated for a genuine behaviour change:
+  production startup now requires
+  CREDENTIAL_ENCRYPTION_KEY as well as SECRET_KEY.
+- Migration 0009 initially failed on SQLite because
+  unique constraints were added with ALTER TABLE;
+  fixed by declaring them inline in create_table, then
+  verified: upgrade to 0009, downgrade to 0008,
+  re-upgrade to 0009 (42 tables, 4 roles, 32
+  permissions, 83 role-permission links).
+- Frontend built by a separate worker under
+  frontend/app/admin/ and frontend/app/login/,
+  forgot-password, reset-password, unauthorized;
+  frontend/app/page.tsx, next.config.js, and
+  package.json untouched; no new dependencies.
+- Tests: 156 passed (133 prior + 23 new Phase 8).
+  Ruff check, ruff format, and black all clean.
+  Frontend npm run build succeeded.
+- Not verified live: PostgreSQL migration 0009,
+  Docker run, live Telegram delivery, production
+  scheduler run, live Futures data (HTTP 451 here).
