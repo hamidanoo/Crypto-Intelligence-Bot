@@ -39,6 +39,14 @@ type PrimeItem = {
   official_url: string;
 };
 
+type CompetitionItem = {
+  id: number;
+  competition_name: string;
+  competition_type: string;
+  status: string;
+  official_url: string;
+};
+
 const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
 export default function Home() {
@@ -48,6 +56,8 @@ export default function Home() {
   const [alphaTokens, setAlphaTokens] = useState<AlphaItem[]>([]);
   const [activeAirdrops, setActiveAirdrops] = useState<AirdropItem[]>([]);
   const [activePrimeSales, setActivePrimeSales] = useState<PrimeItem[]>([]);
+  const [activeCompetitions, setActiveCompetitions] = useState<CompetitionItem[]>([]);
+  const [upcomingCompetitions, setUpcomingCompetitions] = useState<CompetitionItem[]>([]);
 
   useEffect(() => {
     fetch(`${apiBase}/health`)
@@ -73,6 +83,18 @@ export default function Home() {
       .then((response) => (response.ok ? response.json() : null))
       .then((data) => {
         if (data) setActiveAirdrops(data.items ?? []);
+      })
+      .catch(() => {});
+    fetch(`${apiBase}/competitions/active?page_size=5`)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        if (data) setActiveCompetitions(data.items ?? []);
+      })
+      .catch(() => {});
+    fetch(`${apiBase}/competitions/upcoming?page_size=5`)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        if (data) setUpcomingCompetitions(data.items ?? []);
       })
       .catch(() => {});
     fetch(`${apiBase}/prime-sales/active?page_size=5`)
@@ -166,6 +188,39 @@ export default function Home() {
                   {item.token_name}
                 </a>
                 <span className="ml-2 text-slate-400">{item.status}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+      <section className="mt-6 rounded-lg border border-slate-800 bg-slate-900 p-4">
+        <h2 className="font-semibold">Trading competitions</h2>
+        <h3 className="mt-3 text-sm font-semibold text-slate-300">Active competitions</h3>
+        {activeCompetitions.length === 0 ? (
+          <p className="mt-1 text-sm text-slate-400">None recorded yet.</p>
+        ) : (
+          <ul className="mt-1 space-y-1 text-sm">
+            {activeCompetitions.map((item) => (
+              <li key={item.id}>
+                <a className="text-sky-400 underline" href={item.official_url} target="_blank" rel="noreferrer">
+                  {item.competition_name}
+                </a>
+                <span className="ml-2 text-slate-400">{item.competition_type} — {item.status}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+        <h3 className="mt-3 text-sm font-semibold text-slate-300">Upcoming competitions</h3>
+        {upcomingCompetitions.length === 0 ? (
+          <p className="mt-1 text-sm text-slate-400">None recorded yet.</p>
+        ) : (
+          <ul className="mt-1 space-y-1 text-sm">
+            {upcomingCompetitions.map((item) => (
+              <li key={item.id}>
+                <a className="text-sky-400 underline" href={item.official_url} target="_blank" rel="noreferrer">
+                  {item.competition_name}
+                </a>
+                <span className="ml-2 text-slate-400">{item.competition_type} — {item.status}</span>
               </li>
             ))}
           </ul>
