@@ -93,6 +93,33 @@ type VolumeSummary = {
   last_collection_status: string | null;
 };
 
+type MarketItem = {
+  symbol: string;
+  price: string | null;
+  price_change_percent_24h: string | null;
+  quote_volume_24h: string | null;
+  collected_at: string | null;
+  is_stale: boolean;
+};
+
+type NewsItem = {
+  id: number;
+  headline: string;
+  summary: string;
+  category: string;
+  publisher: string;
+  published_at: string | null;
+  original_url: string;
+};
+
+type FuturesSummary = {
+  availability: string;
+  symbols: number;
+  highest_funding: { symbol: string; funding_rate: string | null } | null;
+  lowest_funding: { symbol: string; funding_rate: string | null } | null;
+  last_collection_status: string | null;
+};
+
 type VolumePairOption = {
   pair: string;
   base_asset: string | null;
@@ -139,6 +166,14 @@ export default function Home() {
   const [volumeSummary, setVolumeSummary] = useState<VolumeSummary | null>(null);
   const [volumeHistory, setVolumeHistory] = useState<VolumeInterval[]>([]);
   const [volumeError, setVolumeError] = useState<string | null>(null);
+  const [marketItems, setMarketItems] = useState<MarketItem[]>([]);
+  const [gainers, setGainers] = useState<MarketItem[]>([]);
+  const [losers, setLosers] = useState<MarketItem[]>([]);
+  const [watchlist, setWatchlist] = useState<MarketItem[]>([]);
+  const [futuresSummary, setFuturesSummary] = useState<FuturesSummary | null>(null);
+  const [newsItems, setNewsItems] = useState<NewsItem[]>([]);
+  const [listings, setListings] = useState<NewsItem[]>([]);
+  const [phase7Error, setPhase7Error] = useState<string | null>(null);
 
   useEffect(() => {
     fetch(`${apiBase}/health`)
@@ -225,6 +260,51 @@ export default function Home() {
       .catch(() => setVolumeError("Volume history unavailable"));
   }, [volumeCompetitionId, volumePair]);
 
+  // Market, Futures, and News (Phase 7): only real backend data.
+  useEffect(() => {
+    fetch(`${apiBase}/market/overview`)
+      .then((response) => response.json())
+      .then((data) => {
+        if (data) setMarketItems(data.items ?? []);
+      })
+      .catch(() => setPhase7Error("Market overview unavailable"));
+    fetch(`${apiBase}/market/gainers?limit=5`)
+      .then((response) => response.json())
+      .then((data) => {
+        if (data) setGainers(data.gainers ?? []);
+      })
+      .catch(() => setPhase7Error("Top gainers unavailable"));
+    fetch(`${apiBase}/market/losers?limit=5`)
+      .then((response) => response.json())
+      .then((data) => {
+        if (data) setLosers(data.losers ?? []);
+      })
+      .catch(() => setPhase7Error("Top losers unavailable"));
+    fetch(`${apiBase}/market/watchlist`)
+      .then((response) => response.json())
+      .then((data) => {
+        if (data) setWatchlist(data.items ?? []);
+      })
+      .catch(() => setPhase7Error("Watchlist unavailable"));
+    fetch(`${apiBase}/futures/summary`)
+      .then((response) => response.json())
+      .then((data) => {
+        if (data) setFuturesSummary(data);
+      })
+      .catch(() => setPhase7Error("Futures summary unavailable"));
+    fetch(`${apiBase}/news?page_size=5`)
+      .then((response) => response.json())
+      .then((data) => {
+        if (data) setNewsItems(data.items ?? []);
+      })
+      .catch(() => setPhase7Error("News unavailable"));
+    fetch(`${apiBase}/news/listings?page_size=5`)
+      .then((response) => response.json())
+      .then((data) => {
+        if (data) setListings(data.items ?? []);
+      })
+      .catch(() => setPhase7Error("Listings unavailable"));
+  }, []);
   const selectedPairSummary = volumeSummary?.per_pair.find(
     (item) => item.trading_pair === volumePair
   );
@@ -493,6 +573,158 @@ export default function Home() {
               </table>
             )}
           </>
+        )}
+      </section>
+      <section className="mt-6 rounded-lg border border-slate-800 bg-slate-900 p-4">
+        <h2 className="font-semibold">Market</h2>
+        <p className="mt-2 text-sm text-slate-400">
+          Prices come from Binance Spot public data. Symbols below the
+          minimum quote volume are excluded from gainers and losers, and
+          stale data is labelled as stale. Price movements are not
+          trading opportunities.
+        </p>
+        {phase7Error && <p className="mt-2 text-sm text-red-400">{phase7Error}</p>}
+        {marketItems.length === 0 ? (
+          <p className="mt-2 text-sm text-slate-400">No market snapshots collected yet.</p>
+        ) : (
+          <table className="mt-2 w-full text-left text-sm">
+            <thead>
+              <tr className="text-slate-400">
+                <th>Symbol</th>
+                <th>Price</th>
+                <th>24h change</th>
+                <th>24h quote volume</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {marketItems.map((item) => (
+                <tr key={item.symbol} className="border-t border-slate-800">
+                  <td>{item.symbol}</td>
+                  <td>{item.price ?? "Unavailable"}</td>
+                  <td>{item.price_change_percent_24h ?? "Unavailable"}%</td>
+                  <td>{item.quote_volume_24h ?? "Unavailable"}</td>
+                  <td>{item.is_stale ? "Stale" : "Fresh"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        <h3 className="mt-4 text-sm font-semibold text-slate-300">Top gainers</h3>
+        {gainers.length === 0 ? (
+          <p className="mt-1 text-sm text-slate-400">No gainers yet.</p>
+        ) : (
+          <ul className="mt-1 space-y-1 text-sm">
+            {gainers.map((item) => (
+              <li key={item.symbol}>
+                {item.symbol}: {item.price} ({item.price_change_percent_24h}%)
+              </li>
+            ))}
+          </ul>
+        )}
+        <h3 className="mt-4 text-sm font-semibold text-slate-300">Top losers</h3>
+        {losers.length === 0 ? (
+          <p className="mt-1 text-sm text-slate-400">No losers yet.</p>
+        ) : (
+          <ul className="mt-1 space-y-1 text-sm">
+            {losers.map((item) => (
+              <li key={item.symbol}>
+                {item.symbol}: {item.price} ({item.price_change_percent_24h}%)
+              </li>
+            ))}
+          </ul>
+        )}
+        <h3 className="mt-4 text-sm font-semibold text-slate-300">Watchlist</h3>
+        {watchlist.length === 0 ? (
+          <p className="mt-1 text-sm text-slate-400">Watchlist is empty.</p>
+        ) : (
+          <ul className="mt-1 space-y-1 text-sm">
+            {watchlist.map((item) => (
+              <li key={item.symbol}>
+                {item.symbol}: {item.price ?? "Unavailable"}
+                {item.is_stale ? " (stale)" : ""}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+      <section className="mt-6 rounded-lg border border-slate-800 bg-slate-900 p-4">
+        <h2 className="font-semibold">Futures</h2>
+        <p className="mt-2 text-sm text-slate-400">
+          Funding rates and open interest come from Binance Futures
+          public data. When Futures is restricted in this location, this
+          section reports Unavailable instead of showing invented data.
+          Open interest alone does not imply market direction.
+        </p>
+        {futuresSummary === null ? (
+          <p className="mt-2 text-sm text-slate-400">Futures summary unavailable.</p>
+        ) : (
+          <dl className="mt-3 space-y-1 text-sm">
+            <div>
+              <dt className="inline text-slate-400">Availability: </dt>
+              <dd className="inline">{futuresSummary.availability}</dd>
+            </div>
+            <div>
+              <dt className="inline text-slate-400">Symbols tracked: </dt>
+              <dd className="inline">{futuresSummary.symbols}</dd>
+            </div>
+            <div>
+              <dt className="inline text-slate-400">Highest funding: </dt>
+              <dd className="inline">
+                {futuresSummary.highest_funding
+                  ? `${futuresSummary.highest_funding.symbol}: ${futuresSummary.highest_funding.funding_rate ?? "Unavailable"}`
+                  : "Unavailable"}
+              </dd>
+            </div>
+            <div>
+              <dt className="inline text-slate-400">Lowest funding: </dt>
+              <dd className="inline">
+                {futuresSummary.lowest_funding
+                  ? `${futuresSummary.lowest_funding.symbol}: ${futuresSummary.lowest_funding.funding_rate ?? "Unavailable"}`
+                  : "Unavailable"}
+              </dd>
+            </div>
+          </dl>
+        )}
+      </section>
+      <section className="mt-6 rounded-lg border border-slate-800 bg-slate-900 p-4">
+        <h2 className="font-semibold">News</h2>
+        <p className="mt-2 text-sm text-slate-400">
+          News is built from official Binance announcements. Summaries
+          are unavailable when article bodies cannot be fetched; only
+          the headline and the original link are shown then.
+        </p>
+        {newsItems.length === 0 ? (
+          <p className="mt-2 text-sm text-slate-400">No news collected yet.</p>
+        ) : (
+          <ul className="mt-2 space-y-2 text-sm">
+            {newsItems.map((item) => (
+              <li key={item.id}>
+                <span className="text-slate-400">[{item.category}] </span>
+                {item.headline} — {item.publisher}
+                {item.published_at ? ` (${formatUtc(item.published_at)}; ${formatPkt(item.published_at)})` : ""}
+                <br />
+                <a className="text-sky-400 underline" href={item.original_url}>
+                  Read original
+                </a>
+              </li>
+            ))}
+          </ul>
+        )}
+        <h3 className="mt-4 text-sm font-semibold text-slate-300">Listings</h3>
+        {listings.length === 0 ? (
+          <p className="mt-1 text-sm text-slate-400">No listings yet.</p>
+        ) : (
+          <ul className="mt-1 space-y-1 text-sm">
+            {listings.map((item) => (
+              <li key={item.id}>
+                {item.headline} —{" "}
+                <a className="text-sky-400 underline" href={item.original_url}>
+                  Read original
+                </a>
+              </li>
+            ))}
+          </ul>
         )}
       </section>
     </main>
