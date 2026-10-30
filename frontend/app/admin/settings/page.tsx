@@ -34,7 +34,20 @@ export default function SettingsPage() {
   async function save() {
     setBusy(true);
     try {
-      await apiMutate("/api/admin/system-settings", "PATCH", { key: editKey, value: editValue });
+      // The API requires a JSON object value (Phase 9
+      // audit): sending a plain string always failed
+      // validation with 422. Accept JSON text, or a
+      // bare string wrapped as {"value": ...}.
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(editValue);
+      } catch {
+        parsed = { value: editValue };
+      }
+      if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+        parsed = { value: parsed };
+      }
+      await apiMutate("/api/admin/system-settings", "PATCH", { key: editKey, value: parsed });
       setFeedback(`Setting ${editKey} updated.`);
       setEditKey("");
       setEditValue("");
@@ -57,9 +70,9 @@ export default function SettingsPage() {
             {items.map((it) => (
               <tr key={it.key}>
                 <td className={tdClass}>{it.key}</td>
-                <td className={tdClass}>{it.value === null || it.value === undefined ? "—" : String(it.value)}</td>
+                <td className={tdClass}>{it.value === null || it.value === undefined ? "—" : JSON.stringify(it.value)}</td>
                 <td className={tdClass}>{it.description ?? "—"}</td>
-                <td className={tdClass}><button className="btn" onClick={() => { setEditKey(it.key); setEditValue(it.value === null || it.value === undefined ? "" : String(it.value)); }}>Edit</button></td>
+                <td className={tdClass}><button className="btn" onClick={() => { setEditKey(it.key); setEditValue(it.value === null || it.value === undefined ? "" : JSON.stringify(it.value)); }}>Edit</button></td>
               </tr>
             ))}
           </tbody>

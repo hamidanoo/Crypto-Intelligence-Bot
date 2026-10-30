@@ -320,7 +320,7 @@ export default function Home() {
     <main className="mx-auto max-w-3xl p-8">
       <h1 className="text-3xl font-bold">Crypto Intelligence Admin</h1>
       <p className="mt-2 text-slate-400">
-        Phase 1 foundation. The full dashboard pages arrive in Phase 8; this
+        Admin dashboard complete through Phase 8 and audited in Phase 9; this
         page verifies the frontend can reach the live backend health endpoint.
       </p>
       <section className="mt-6 rounded-lg border border-slate-800 bg-slate-900 p-4">

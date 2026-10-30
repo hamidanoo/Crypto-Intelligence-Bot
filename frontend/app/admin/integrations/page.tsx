@@ -85,8 +85,7 @@ export default function IntegrationsPage() {
   }
 
   async function toggle(it: Item) {
-    if (!it.enabled && !window.confirm(`Disable integration ${it.provider}?`)) return;
-    if (it.enabled && !window.confirm(`Disable integration ${it.provider}?`)) return;
+    if (!window.confirm(`${it.enabled ? "Disable" : "Enable"} integration ${it.provider}?`)) return;
     try {
       await apiMutate(`/api/admin/integrations/${it.id}`, "PATCH", { enabled: !it.enabled });
       setFeedback(`Integration ${!it.enabled ? "enabled" : "disabled"}.`);

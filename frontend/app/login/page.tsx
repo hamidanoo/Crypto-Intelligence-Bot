@@ -25,7 +25,10 @@ function LoginForm() {
         body: { username, password },
         csrf: true,
       });
-      router.replace(next.startsWith("/") ? next : "/admin");
+      // Reject protocol-relative URLs (//evil.example)
+      // as well as non-path values: the old guard
+      // accepted any string starting with "/".
+      router.replace(next.startsWith("/") && !next.startsWith("//") ? next : "/admin");
     } catch (err) {
       const status = (err as { status?: number }).status;
       if (status === 401) setError("Invalid username or password");
