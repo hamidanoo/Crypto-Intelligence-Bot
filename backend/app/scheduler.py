@@ -18,9 +18,29 @@ scheduler = AsyncIOScheduler(timezone="UTC")
 
 
 def register_jobs() -> None:
-    """Register scheduled jobs. Phase 1 registers none: later phases
-    add their collectors here with explicit, idempotent job ids."""
-    logger.info("Scheduler initialised with no Phase 1 jobs registered")
+    """Register scheduled jobs, idempotently.
+
+    Phase 3 adds one job: announcement collection, every 5
+    minutes, with max_instances=1 so runs never overlap.
+    Calling register_jobs twice does not register the job
+    twice: an existing job with the same id is left alone.
+    """
+    from app.announcements.scheduler_job import JOB_ID, collect_all_announcements
+
+    if scheduler.get_job(JOB_ID) is None:
+        scheduler.add_job(
+            collect_all_announcements,
+            "interval",
+            minutes=5,
+            id=JOB_ID,
+            max_instances=1,
+            coalesce=True,
+            misfire_grace_time=60,
+            replace_existing=False,
+        )
+        logger.info("Scheduled announcement collection job registered")
+    else:
+        logger.info("Announcement collection job already registered")
 
 
 def start_scheduler() -> None:
