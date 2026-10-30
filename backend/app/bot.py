@@ -120,6 +120,51 @@ async def status_handler(message: types.Message) -> None:
     )
 
 
+async def _reply_competitions(
+    message: types.Message, status_filter: str | None = None, search: str | None = None
+) -> None:
+    from app.competitions.notifications import format_competition_message
+    from app.models import Competition
+
+    db = _db()
+    try:
+        q = db.query(Competition)
+        if status_filter:
+            q = q.filter(Competition.status == status_filter)
+        if search:
+            q = q.filter(Competition.competition_name.ilike(f"%{search}%"))
+        competitions = q.order_by(Competition.id.desc()).limit(5).all()
+    finally:
+        db.close()
+    if not competitions:
+        await message.answer("None recorded yet.")
+        return
+    lines = [format_competition_message(c) for c in competitions]
+    await message.answer("\n\n".join(lines))
+
+
+@router.message(Command("competition"))
+async def competition_handler(message: types.Message) -> None:
+    args = _args(message)
+    if not args:
+        await _reply_competitions(message)
+        return
+    first = args[0].lower()
+    if first == "active":
+        await _reply_competitions(message, status_filter="ACTIVE")
+    elif first == "upcoming":
+        await _reply_competitions(message, status_filter="UPCOMING")
+    elif first == "completed":
+        await _reply_competitions(message, status_filter="ENDED")
+    elif first == "search":
+        if len(args) < 2:
+            await message.answer("Usage: /competition search <name>")
+            return
+        await _reply_competitions(message, search=" ".join(args[1:]))
+    else:
+        await _reply_competitions(message, search=" ".join(args))
+
+
 @router.message(Command("alpha"))
 async def alpha_handler(message: types.Message) -> None:
     args = _args(message)
