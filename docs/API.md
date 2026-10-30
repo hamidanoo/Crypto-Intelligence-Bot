@@ -131,10 +131,32 @@ Prime Sales:
 - `POST /prime-sales/collect` — collects announcements, then processes PRIME_SALE announcements.
 - `POST /prime-sales/estimate-allocation` — body: `{"user_commitment": "100", "total_commitment": "400", "total_token_allocation": "1000", "sale_price": null, "formula": null}`. All commitment/allocation values must be positive. Response includes `estimated_allocation` (string), the inputs, the formula, `is_estimate: true`, and a guarantee note stating the result is an estimate only, not a guaranteed allocation. A missing or zero total commitment is rejected, never replaced with an invented total.
 
+## Phase 5 endpoints
+
+All Phase 5 endpoints use real database data; no
+competition, reward pool, trading pair, or date is
+fabricated. Financial values are serialised as strings,
+so Decimal precision survives JSON. Database failures
+return HTTP 503, missing records return 404, and
+invalid input returns 400. Manual collection is not
+admin-gated in this phase (authentication is Phase 8),
+so it must only be exposed behind the deployment's own
+access controls. There is no volume endpoint here:
+volume aggregation is Phase 6 work.
+
+- `GET /competitions?page=1&page_size=20&competition_type=&status=&pair=&start_from=&start_to=&end_from=&end_to=&search=&sort=created_at_desc` — paginated competitions. Sort values: `created_at_desc` (default), `created_at_asc`, `start_time_asc`, `start_time_desc`, `reward_pool_desc`. Items include name, type, official URL, reward pool (string or null), reward currency, start/end/registration times (UTC, null when unconfirmed), status, `duration_seconds` (null when dates are missing), eligible pairs and assets, rules/eligibility/multiplier lists (empty in Phase 5), source, and verification status (`official_website` or `needs_review`).
+- `GET /competitions/active` — competitions with status ACTIVE.
+- `GET /competitions/upcoming` — competitions with status UPCOMING.
+- `GET /competitions/completed` — competitions with status ENDED.
+- `GET /competitions/{id}` — one competition; 404 if missing.
+- `GET /competitions/{id}/updates` — the competition update timeline, newest first.
+- `GET /competitions/{id}/pairs` — normalised trading pairs, rewards, and rules for the competition.
+- `POST /competitions/collect` — collects announcements via the Phase 3 service, then processes TRADING_COMPETITION announcements. Response: `{category: "TRADING_COMPETITION", found, created, updated, skipped, errors, status_updates}`; 502 if announcement collection fails.
+
 ## Later phases
 
 Later phases add versioned, authenticated API routes for
-competitions, volume analytics, market, futures, news,
+volume analytics, market, futures, news,
 listings, Telegram settings, integrations, scheduler
 control, audit logs, and system health. Those routes
 are documented here as they are added, not in advance.

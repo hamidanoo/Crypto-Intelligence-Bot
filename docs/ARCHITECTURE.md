@@ -49,6 +49,16 @@ Nginx (reverse proxy: / -> frontend, /api/ -> backend)
   allocation, processing, notifications, scheduler
   jobs); the API layer is
   `backend/app/api/intelligence.py`, and bot commands
+  live in `backend/app/bot.py`. Phase 5 adds one more
+  processing job on the same scheduler,
+  `competition_processing`, every 10 minutes,
+  max_instances=1, which processes stored
+  TRADING_COMPETITION announcements and recomputes
+  date-based statuses; it does not re-fetch the CMS
+  feed. Phase 5 logic lives in
+  `backend/app/competitions/` (parsing, processing,
+  notifications, scheduler jobs); the API layer is
+  `backend/app/api/competitions.py`, and bot commands
   live in `backend/app/bot.py`. APScheduler remains
   single-instance only; distributed coordination is deferred.
 

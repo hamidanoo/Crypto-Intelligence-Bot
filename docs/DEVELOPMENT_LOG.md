@@ -418,3 +418,89 @@ performed in this phase.
   See docs/ALPHA_INTELLIGENCE.md,
   docs/AIRDROP_INTELLIGENCE.md, and
   docs/PRIME_SALE_INTELLIGENCE.md.
+
+## Phase 5 — Binance Trading Competition Intelligence
+
+### Decisions
+
+- Competition discovery processes TRADING_COMPETITION
+  announcements plus ALPHA announcements whose title
+  contains "competition". The Phase 3 classifier's
+  "binance alpha" rule runs before its "competition"
+  rule, so "Binance Alpha Trading Competition" titles
+  are classified ALPHA; changing the classifier order
+  would break Phase 3/4 behaviour, so the processing
+  query covers both categories instead.
+- Article-detail re-check (2026-10-30, live article
+  id 288627, parameters id, articleId, and code):
+  still HTTP 400 with CMS code 000002 "illegal
+  parameter". Phase 5 therefore works from titles and
+  catalog metadata only, exactly as Phase 3/4 did.
+- Change detection matches on a normalised name with
+  lifecycle suffixes ("has been cancelled", and so
+  on) stripped, because a cancellation title is built
+  on the original name plus a suffix. Prefix matching
+  is allowed only for lifecycle announcements, never
+  for plain new competitions, so two distinct
+  competitions are not merged by a shared prefix.
+- Telegram duplicate prevention reuses the Phase 4
+  `campaign_notifications` table with entity_type
+  "competition" instead of a second identical table.
+- Reward parsing deliberately does not handle K/M
+  suffixes or currency-less amounts: "$200K Worth of
+  Rewards" stays null, as the live smoke test showed.
+  Converting it would require assuming a multiplier
+  and a currency.
+
+### Bugs found and fixed during testing
+
+- SQLite returns naive datetimes while PostgreSQL
+  returns aware ones, so `recompute_status` raised
+  "can't compare offset-naive and offset-aware
+  datetimes" on the date test. The function now
+  normalises naive start/end times to aware UTC
+  before comparison. This also affects any later
+  date logic and is worth remembering whenever a
+  stored datetime is compared in tests.
+- Two test expectations (not code) were wrong after
+  name cleaning: cleaned competition names drop the
+  "Binance Futures/Spot" prefix, so "Futures Trading
+  Competition" and a "Spot" name search do not match
+  stored names. The tests were corrected to the
+  stored names and to Type: FUTURES / ETHUSDT
+  searches; the cleaning behaviour itself is
+  intended.
+
+### Testing performed
+
+- Backend tests: `pytest` from `backend/` — 75 passed
+  (52 Phase 1–4, 23 Phase 5; the Phase 5 file
+  contains 23 tests including parsing, type
+  classification, date/timezone handling, reward and
+  pair extraction, missing information, duplicate
+  prevention, persistence, unique constraints, status
+  transitions, postponement, cancellation, updates,
+  scheduler registration, collection runs, API
+  pagination/filtering/sorting, Telegram formatting,
+  duplicate notification prevention, DB-failure 503,
+  and bot commands).
+- Lint/format: `ruff check`, `ruff format --check`,
+  and `black --check` all pass.
+- Alembic against SQLite: upgrade to `0006`
+  succeeded, current reports `0006` (head), 23 data
+  tables present (17 Phase 1–4 + 6 Phase 5).
+- Live CMS smoke test via the running API with a
+  SQLite database: first `/competitions/collect`
+  found 2 and created 2 (Alpha trading competitions
+  for Axis Robotics and Orochi Network; the live
+  first page held 140 announcements, none classified
+  TRADING_COMPETITION), second collect skipped 2
+  duplicates. Reward pools stayed null for "$200K
+  Worth of Rewards" (no currency code, K suffix).
+- Frontend: `npm run build` succeeded.
+- Not tested live: PostgreSQL migration `0006`,
+  Docker Compose run, Telegram delivery (mock only),
+  a production-environment scheduler run, and live
+  processing of a non-Alpha (TRADING_COMPETITION)
+  competition announcement. See
+  docs/COMPETITION_INTELLIGENCE.md.

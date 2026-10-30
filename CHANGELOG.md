@@ -1,5 +1,60 @@
 # Changelog
 
+## Phase 5 — Binance Trading Competition Intelligence
+
+- Add competition models and migration 0006:
+  `competitions`, `competition_trading_pairs`,
+  `competition_rewards`, `competition_rules`,
+  `competition_updates`, and
+  `competition_collection_runs`, with unique
+  constraints, indexes, UTC timestamps, and Decimal
+  financial fields. No volume tables: volume work is
+  Phase 6.
+- Add conservative title-only competition parsing:
+  type classification (TEAM/FUTURES/SPOT/VOLUME/
+  GENERAL), trading-pair and asset extraction, reward
+  pools only for explicit amount-plus-currency in a
+  reward title, dates only for explicit ISO date
+  ranges, and UNKNOWN-by-default status with
+  CANCELLED/POSTPONED/ENDED title signals only.
+- Re-check the CMS article-detail endpoint
+  (2026-10-30, live article, id/articleId/code
+  parameters): still HTTP 400, code `000002
+  "illegal parameter"`, so article bodies remain
+  unavailable and detail fields stay unconfirmed.
+- Add announcement-to-competition processing
+  reusing the Phase 3 collector, with deduplication
+  by announcement_id, discovery of ALPHA-category
+  competition titles, lifecycle change detection by
+  normalised name with a recorded update history,
+  and date-based status recomputation that never
+  overwrites CANCELLED/POSTPONED and never invents
+  a transition from missing dates.
+- Add Phase 5 API endpoints for competition list
+  (type, status, pair, date range, name search,
+  sorting), active, upcoming, completed, detail,
+  updates, pairs, and manual collection, with
+  pagination, Decimal-as-string serialisation, and
+  404/502/503 handling. Manual collect is not
+  admin-gated until Phase 8 and must sit behind
+  deployment access controls.
+- Add one idempotent scheduler job on the existing
+  APScheduler instance (`competition_processing`,
+  every 10 minutes, max_instances=1) that processes
+  stored announcements and records a collection run.
+- Add Telegram commands `/competition`,
+  `/competition active`, `/competition upcoming`,
+  `/competition completed`, and
+  `/competition search <name>`, with Asia/Karachi
+  (PKT) display times, confirmed-only reward pools
+  and pairs, and notification formatters with
+  duplicate prevention reusing
+  `campaign_notifications` (entity_type
+  "competition").
+- Add a small real-data competition overview to the
+  existing home page (active and upcoming
+  competitions, or "None recorded yet").
+
 ## Phase 4 — Binance Alpha, Airdrop & Prime Sale Intelligence
 
 - Add Alpha, airdrop, and Prime Sale models and

@@ -1,9 +1,99 @@
 # Project Status
 
-- **Current phase:** Phase 4 — Binance Alpha, Airdrop & Prime Sale Intelligence
-- **Current branch:** `phase-04-alpha-airdrop-prime`, created from `phase-03-announcement-monitor` at `94c9f96fa51a8d495ffc7ef79163e0146a59cdc5` (verified remotely before creation)
-- **Latest commit:** See the Phase 4 report for the verified branch head and each Phase 4 commit hash. This file follows the established pattern: a status file cannot contain its own commit hash, so the head commit is reported alongside this file, not inside it.
+- **Current phase:** Phase 5 — Binance Trading Competition Intelligence
+- **Current branch:** `phase-05-competition-intelligence`, created from `phase-04-alpha-airdrop-prime` at `d9de62910645a92e6dd6b636a014ae1bd487e23d` (verified remotely before creation)
+- **Latest commit:** See the Phase 5 report for the verified branch head and each Phase 5 commit hash. This file follows the established pattern: a status file cannot contain its own commit hash, so the head commit is reported alongside this file, not inside it.
 - **Merged into main:** No. Merging requires explicit approval.
+
+## Completed features (Phase 5)
+
+- Binance trading competition intelligence: competitions
+  discovered from TRADING_COMPETITION announcements,
+  plus ALPHA announcements whose title contains
+  "competition" (the Phase 3 classifier marks "Binance
+  Alpha Trading Competition" titles ALPHA, so without
+  this rule they would be missed; the classifier order
+  itself was not changed). No volume work: no
+  30-minute aggregation, no cumulative or
+  multiplier-adjusted volume reports — that is Phase 6.
+- Conservative title-only extraction: competition
+  type (TEAM/FUTURES/SPOT/VOLUME/GENERAL, in that
+  order), trading pairs and base assets, reward pool
+  only for an explicit amount plus currency in a
+  reward/prize/pool title (Decimal), dates only for
+  an explicit ISO date range (UTC). Everything else
+  is null, empty, or UNKNOWN. Unreliable names are
+  still created with verification status
+  "needs_review", never dropped silently or given
+  invented details.
+- Article-detail endpoint re-checked 2026-10-30
+  against a live article (id 288627, via id,
+  articleId, and code parameters): still HTTP 400,
+  CMS code `000002 "illegal parameter"`. Article
+  bodies remain unavailable, so detail fields stay
+  unconfirmed.
+- Lifecycle: UNKNOWN by default; title signals for
+  CANCELLED/POSTPONED/ENDED only; date-based
+  recomputation (UPCOMING/ACTIVE/ENDED) only when
+  both dates exist, with CANCELLED/POSTPONED
+  terminal. Later announcements with the same
+  normalised name (lifecycle suffixes stripped for
+  matching, prefix matching only for lifecycle
+  announcements) update the existing competition
+  and record a CompetitionUpdate per changed field,
+  instead of silently overwriting or duplicating.
+- Database models and migration `0006`:
+  `competitions`, `competition_trading_pairs`,
+  `competition_rewards`, `competition_rules`,
+  `competition_updates`, and
+  `competition_collection_runs`, with unique
+  constraints, indexes, UTC timestamps, and Decimal
+  fields. Telegram duplicate prevention reuses
+  `campaign_notifications` with entity_type
+  "competition".
+- FastAPI endpoints: competition list (type, status,
+  pair, date range, name search, sorting), active,
+  upcoming, completed, detail (with
+  `duration_seconds`), updates timeline, pairs/
+  rewards/rules, and manual collection (collect via
+  Phase 3, then process). Pagination, Decimal-as-
+  string serialisation, 404/502/503 handling.
+  Manual collect is not admin-gated until Phase 8
+  and must sit behind deployment access controls.
+- Scheduler: one new idempotent job on the existing
+  APScheduler instance, `competition_processing`,
+  every 10 minutes, max_instances=1, processing
+  stored announcements and recording a collection
+  run; it does not re-fetch the CMS feed.
+  APScheduler remains single-instance only
+  (documented).
+- Telegram: commands `/competition`,
+  `/competition active`, `/competition upcoming`,
+  `/competition completed`,
+  `/competition search <name>`, with Asia/Karachi
+  (PKT) display times when dates exist, reward pools
+  and pairs only when confirmed, and "None recorded
+  yet" when empty; plus notification formatters for
+  new, starting, ending soon, postponed, cancelled,
+  and rule/reward changes. Live delivery was NOT
+  tested (no token); mock formatting tests cover
+  the messages.
+- Frontend: a small real-data section on the
+  existing home page (active and upcoming
+  competitions, or "None recorded yet") — not a
+  dashboard (Phase 8).
+- Live smoke test: first `/competitions/collect`
+  found 2 and created 2 (Alpha trading competitions
+  for Axis Robotics and Orochi Network; no
+  TRADING_COMPETITION announcements in the live
+  first page, which held 140 announcements), second
+  collect skipped 2 duplicates. Reward pools stayed
+  null for "$200K Worth of Rewards" (no currency
+  code, K suffix — not parsed under the
+  conservative rule). Live PostgreSQL migration
+  `0006`, Docker Compose, live Telegram delivery,
+  and a production-environment scheduler run remain
+  unverified and are documented, not faked.
 
 ## Completed features (Phase 4)
 

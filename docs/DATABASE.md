@@ -79,9 +79,44 @@
     unique on (entity_type, entity_id,
     notification_type), with status, sent time, and
     error message.
-- Later phases add the competition, volume snapshot,
-  market, futures, news, notification, template, and
-  job tables, each with its own migration and the
-  same UTC and uniqueness rules.
+- Phase 5 (migration `0006`) adds:
+  - `competitions` — one record per TRADING_COMPETITION
+    announcement (unique announcement_id): name,
+    description (the full title), type
+    (TEAM/FUTURES/SPOT/VOLUME/GENERAL), official URL,
+    Decimal reward pool and currency, start/end/
+    registration times (UTC, nullable), status
+    (UPCOMING/ACTIVE/ENDED/CANCELLED/POSTPONED/
+    UNKNOWN), eligible pairs and assets (JSON),
+    rules/eligibility/multiplier lists (JSON, empty
+    in Phase 5), source, verification status
+    (official_website or needs_review), and a
+    `metadata` JSON column with the normalised name
+    used for change detection. Indexed on
+    announcement, name, type, status, and dates.
+  - `competition_trading_pairs` — normalised pairs,
+    unique on (competition, pair), with base and
+    quote assets.
+  - `competition_rewards` — reward rows per
+    competition (one row in Phase 5, only when the
+    title states a pool).
+  - `competition_rules` — rule rows per competition
+    (empty in Phase 5; structure ready for later
+    phases).
+  - `competition_updates` — change history: creation,
+    status, reward, and pairs changes, with old and
+    new values.
+  - `competition_collection_runs` — one row per
+    scheduled processing run, with found/created/
+    updated/skipped counts, status, and error message.
+  - Telegram duplicate prevention for competitions
+    reuses `campaign_notifications` with
+    entity_type "competition" (unique on entity,
+    entity id, and notification type); no separate
+    notification table was created.
+- Later phases add the volume snapshot, market,
+  futures, news, notification, template, and job
+  tables, each with its own migration and the same
+  UTC and uniqueness rules.
 - Backups and restore procedures are documented in
   `docs/BACKUP_RESTORE.md`.
