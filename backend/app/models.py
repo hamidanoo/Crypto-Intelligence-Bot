@@ -138,6 +138,111 @@ class FuturesSnapshot(Base):
     )
 
 
+class AnnouncementSource(Base, TimestampMixin):
+    """A configured announcement source.
+
+    Phase 3 seeds one source: the official Binance website CMS
+    feed. Other sources can be added later through the API
+    configuration endpoints, without changing the collector
+    engine, as long as they implement the same normalised
+    article shape.
+    """
+
+    __tablename__ = "announcement_sources"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(128), unique=True, index=True, nullable=False)
+    source_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    base_url: Mapped[str] = mapped_column(String(512), nullable=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    polling_interval_seconds: Mapped[int] = mapped_column(Integer, default=300, nullable=False)
+    configuration: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    last_success_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_error_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_error_message: Mapped[str | None] = mapped_column(Text)
+
+
+class Announcement(Base, TimestampMixin):
+    """One collected announcement, stored exactly as published
+    plus normalised fields for search and classification.
+
+    Deduplication uses (source_id, external_id) and
+    canonical_url, never title alone. ``content_hash`` records
+    the title, code, and publication time, so a changed title
+    can be detected and updated without creating a duplicate.
+    ``verification_status`` describes the source, not the
+    category: "official_website" means the record came from
+    the official Binance website feed; category certainty is
+    recorded separately in ``category_confidence``.
+    """
+
+    __tablename__ = "announcements"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    source_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("announcement_sources.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    source_name: Mapped[str] = mapped_column(String(128), nullable=False)
+    external_id: Mapped[str] = mapped_column(String(128), index=True, nullable=False)
+    code: Mapped[str | None] = mapped_column(String(128), index=True)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    slug: Mapped[str | None] = mapped_column(String(512))
+    canonical_url: Mapped[str] = mapped_column(
+        String(1024), unique=True, index=True, nullable=False
+    )
+    category: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    category_confidence: Mapped[str] = mapped_column(String(16), default="low", nullable=False)
+    summary: Mapped[str | None] = mapped_column(Text)
+    original_content: Mapped[str | None] = mapped_column(Text)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    collected_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, index=True, nullable=False
+    )
+    content_hash: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    verification_status: Mapped[str] = mapped_column(
+        String(64), default="official_website", nullable=False
+    )
+    metadata_json: Mapped[dict] = mapped_column("metadata", JSON, default=dict, nullable=False)
+    notification_status: Mapped[str] = mapped_column(
+        String(32), default="pending", index=True, nullable=False
+    )
+    notified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    notification_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    last_notification_error: Mapped[str | None] = mapped_column(Text)
+
+    __table_args__ = (
+        UniqueConstraint("source_id", "external_id", name="uq_announcements_source_external"),
+    )
+
+
+class CollectionRun(Base):
+    """One collection attempt for one source, for observability
+    and restart recovery. A run is created before fetching, so
+    a failed run is visible even when no announcements arrive."""
+
+    __tablename__ = "collection_runs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    source_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("announcement_sources.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, index=True, nullable=False
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    status: Mapped[str] = mapped_column(String(32), index=True, nullable=False)
+    announcements_found: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    announcements_created: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    duplicates_skipped: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    error_message: Mapped[str | None] = mapped_column(Text)
+
+
 class AuditLog(Base, TimestampMixin):
     """Append-only record of administrative actions."""
 

@@ -43,6 +43,17 @@ class Settings(BaseSettings):
     binance_max_retries: int = 3
     tracked_symbols: str = "BTCUSDT,ETHUSDT,BNBUSDT,SOLUSDT,XRPUSDT"
 
+    # Announcement monitoring (Phase 3). The base URL is the
+    # official Binance website; the CMS endpoint below is the
+    # website's own announcement feed, not a documented public
+    # API, so it is labelled as such in the documentation.
+    binance_announcements_base_url: str = "https://www.binance.com"
+    binance_announcements_endpoint: str = "/bapi/composite/v1/public/cms/article/list/query"
+    announcement_polling_interval_seconds: int = 300
+    # Comma-separated categories to notify about. Empty means
+    # all categories. See docs/ANNOUNCEMENT_MONITOR.md.
+    announcement_notification_categories: str = ""
+
     @model_validator(mode="after")
     def _validate_production_secret(self):
         if self.environment == "production" and (
