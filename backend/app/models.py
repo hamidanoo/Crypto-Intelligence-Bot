@@ -566,6 +566,185 @@ class CompetitionCollectionRun(Base):
     error_message: Mapped[str | None] = mapped_column(Text)
 
 
+class CompetitionVolumeInterval(Base):
+    """One completed 30-minute UTC volume interval for one
+    competition trading pair, aggregated from Binance Spot
+    public trade data (aggTrades).
+
+    Public market volume is what Binance public trades
+    show; it is never presented as eligible volume.
+    Estimated eligible volume is set only when a verified
+    multiplier configuration exists (see
+    CompetitionPairConfiguration); otherwise it is null.
+    Official eligible volume is always null in Phase 6:
+    no authoritative Binance source for it is
+    implemented, so it is displayed as "Unavailable",
+    never zero. ``data_status`` is "complete" for a
+    fully covered interval, "partial" when the
+    competition starts or ends mid-interval (only
+    trades inside the competition window are counted),
+    and "incomplete" when the fetch failed, in which
+    case the volumes stay null, never zero. A fetch
+    that succeeded but genuinely returned no trades in
+    the window stores Decimal 0 with status complete.
+    ``recalculated`` marks an interval whose totals were
+    updated by a later fetch (late-arriving trades);
+    recalculation never creates a duplicate row and
+    never re-sends a Telegram report.
+    """
+
+    __tablename__ = "competition_volume_intervals"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    competition_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("competitions.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    trading_pair: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    base_asset: Mapped[str | None] = mapped_column(String(64))
+    quote_asset: Mapped[str | None] = mapped_column(String(64))
+    interval_start: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), index=True, nullable=False
+    )
+    interval_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    public_base_volume: Mapped[Decimal | None] = mapped_column(Numeric(28, 8))
+    public_quote_volume: Mapped[Decimal | None] = mapped_column(Numeric(28, 8))
+    estimated_eligible_volume: Mapped[Decimal | None] = mapped_column(Numeric(28, 8))
+    official_eligible_volume: Mapped[Decimal | None] = mapped_column(Numeric(28, 8))
+    calculation_method: Mapped[str | None] = mapped_column(String(128))
+    data_status: Mapped[str] = mapped_column(
+        String(32), index=True, default="incomplete", nullable=False
+    )
+    recalculated: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    collected_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, index=True, nullable=False
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "competition_id",
+            "trading_pair",
+            "interval_start",
+            name="uq_volume_intervals_competition_pair_start",
+        ),
+    )
+
+
+class CompetitionVolumeCheckpoint(Base, TimestampMixin):
+    """Per-pair collection progress: the end of the last
+    contiguously collected completed interval, and the
+    last trade id seen, so a later run resumes (backfill)
+    instead of re-fetching from the competition start."""
+
+    __tablename__ = "competition_volume_checkpoints"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    competition_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("competitions.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    trading_pair: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    last_interval_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_trade_id: Mapped[int | None] = mapped_column(Integer)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "competition_id",
+            "trading_pair",
+            name="uq_volume_checkpoints_competition_pair",
+        ),
+    )
+
+
+class CompetitionVolumeCollectionRun(Base):
+    """One volume collection attempt, per competition.
+    A run is written even when a competition has no
+    trading pairs (0 intervals, with a note in
+    error_message) and even when a pair fails, so a
+    failed or empty run is visible, never hidden."""
+
+    __tablename__ = "competition_volume_collection_runs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    competition_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("competitions.id", ondelete="CASCADE"), index=True
+    )
+    started: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, index=True, nullable=False
+    )
+    completed: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    status: Mapped[str] = mapped_column(String(32), index=True, default="running", nullable=False)
+    intervals_found: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    intervals_created: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    intervals_updated: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    intervals_skipped: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    error_message: Mapped[str | None] = mapped_column(Text)
+
+
+class CompetitionVolumeReport(Base):
+    """One Telegram volume report attempt per
+    (competition, pair, interval). The unique constraint
+    plus the status check is the duplicate prevention:
+    a sent report is never re-sent by a retry or a
+    re-collection; a failed row may be retried and
+    updated in place, never duplicated."""
+
+    __tablename__ = "competition_volume_reports"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    competition_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("competitions.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    trading_pair: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    interval_start: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), index=True, nullable=False
+    )
+    interval_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    message_text: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(32), index=True, default="pending", nullable=False)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    error_message: Mapped[str | None] = mapped_column(Text)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "competition_id",
+            "trading_pair",
+            "interval_start",
+            name="uq_volume_reports_competition_pair_start",
+        ),
+    )
+
+
+class CompetitionPairConfiguration(Base, TimestampMixin):
+    """Per-pair volume tracking configuration. A
+    multiplier affects estimated eligible volume ONLY
+    when multiplier_verified is True and a multiplier
+    is set; an unverified multiplier is stored but
+    never applied, and the estimate stays null. No
+    multiplier, weight, or eligibility rule is ever
+    invented: without a verified configuration, the
+    estimate is null, not zero."""
+
+    __tablename__ = "competition_pair_configurations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    competition_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("competitions.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    trading_pair: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    multiplier: Mapped[Decimal | None] = mapped_column(Numeric(28, 8))
+    multiplier_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    tracking_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    calculation_method: Mapped[str | None] = mapped_column(String(128))
+    note: Mapped[str | None] = mapped_column(Text)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "competition_id",
+            "trading_pair",
+            name="uq_pair_configurations_competition_pair",
+        ),
+    )
+
+
 class AuditLog(Base, TimestampMixin):
     """Append-only record of administrative actions."""
 
