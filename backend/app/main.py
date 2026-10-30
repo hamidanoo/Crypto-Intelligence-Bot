@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.announcements import router as announcements_router
 from app.api.competitions import router as competitions_router
+from app.api.volume import router as volume_router
 from app.api.binance import router as binance_router
 from app.api.health import router as health_router
 from app.api.intelligence import router as intelligence_router
@@ -42,3 +43,4 @@ app.include_router(binance_router)
 app.include_router(announcements_router)
 app.include_router(competitions_router)
 app.include_router(intelligence_router)
+app.include_router(volume_router)
