@@ -209,11 +209,18 @@ Phase 3+ features were added.
   error. `app/rate_limit.py` limits Binance routes to 120
   requests per minute per client IP, single-instance only;
   distributed limiting is documented for later.
-- CI and formatting: `.github/workflows/ci.yml`,
-  `backend/pyproject.toml` (ruff line length 100, black),
-  and `scripts/check.sh`. All backend code and tests were
-  formatted with ruff format and black, and pass
-  `ruff check`, `ruff format --check`, and `black --check`.
+- CI and formatting: `backend/pyproject.toml` (ruff line
+  length 100, black) and `scripts/check.sh`. All backend
+  code and tests were formatted with ruff format and black,
+  and pass `ruff check`, `ruff format --check`, and
+  `black --check`. A GitHub Actions workflow file was
+  prepared locally (`.github/workflows/ci.yml`) with the
+  same steps, but pushing it alone failed with GitHub 403
+  "Resource not accessible by integration", while the rest
+  of the fix push succeeded. The workflow file is therefore
+  local-only until it is added manually or the GitHub App
+  gains workflow write access; this is a permission limit,
+  not a code failure.
 
 ### Testing performed in this fix pass
 

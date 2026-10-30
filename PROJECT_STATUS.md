@@ -2,7 +2,7 @@
 
 - **Current phase:** Phase 1 + Phase 2 bug-fix pass (Phase 3 NOT approved)
 - **Current branch:** `fix-phase1-phase2-issues`, created from `phase-02-binance-integration`
-- **Latest commit:** to be filled in after the fix push, by reading the branch back (see the fix report in chat; the status-update commit itself cannot contain its own hash).
+- **Latest commit:** `b546e97f99f1619111c24190b27e0141d98f825d` — "Fix Phase 1 and Phase 2 issues: scheduler, migrations, proxy, secrets, CORS, funding order, retries, Decimal, cache and rate limits", on `fix-phase1-phase2-issues`, verified by reading the branch back after the push. A following status-update commit will head the branch after this file is pushed (see the fix report in chat).
 - **Merged into main:** No. Merging requires explicit approval.
 
 ## Completed features (Phase 2, plus fixes)
@@ -72,11 +72,17 @@
 - Docker and Docker Compose configuration for PostgreSQL, Redis,
   backend, bot, frontend, and Nginx.
 - Environment template (`.env.example`) with placeholders only.
-- CI: `.github/workflows/ci.yml` runs backend lint, format,
-  and tests plus the frontend build. Linting (ruff) and
-  formatting (black, ruff format) configuration live in
-  `backend/pyproject.toml`; `scripts/check.sh` runs the same
-  checks locally.
+- CI: linting (ruff) and formatting (black, ruff format)
+  configuration live in `backend/pyproject.toml`;
+  `scripts/check.sh` runs lint, format, tests, and the
+  frontend build locally. A GitHub Actions workflow file
+  (`.github/workflows/ci.yml`) was prepared in the local
+  workspace but could NOT be pushed via the current GitHub
+  integration: GitHub returned 403 "Resource not accessible
+  by integration" for that file alone, while all other files
+  pushed successfully. That file is therefore not on the
+  branch yet; it can be added manually from the local copy,
+  or after the GitHub App is granted workflow write access.
 - Project documentation set, plus `docs/ISSUE_FIX_PLAN.md`
   (issue classification) and `docs/EXTERNAL_VERIFICATION.md`
   (exact commands for the checks that still need an external
