@@ -35,6 +35,20 @@ def register_jobs() -> None:
     from app.announcements.scheduler_job import JOB_ID, collect_all_announcements
     from app.competitions.scheduler_jobs import JOB_COMPETITION, process_competition_job
     from app.config import settings
+    from app.marketintel.scheduler_jobs import (
+        JOB_FUNDING,
+        JOB_LISTINGS,
+        JOB_MARKET_SNAPSHOT,
+        JOB_MOVEMENT,
+        JOB_NEWS,
+        JOB_OPEN_INTEREST,
+        process_funding_job,
+        process_listing_job,
+        process_market_snapshot_job,
+        process_movement_job,
+        process_news_job,
+        process_open_interest_job,
+    )
     from app.volume.scheduler_jobs import JOB_VOLUME, process_volume_job
     from app.intelligence.scheduler_jobs import (
         JOB_AIRDROP,
@@ -72,6 +86,20 @@ def register_jobs() -> None:
             process_volume_job,
             max(1, settings.volume_tracking_interval_minutes),
         ),
+        (
+            JOB_MARKET_SNAPSHOT,
+            process_market_snapshot_job,
+            max(1, settings.market_snapshot_interval_minutes),
+        ),
+        (JOB_FUNDING, process_funding_job, max(1, settings.futures_funding_interval_minutes)),
+        (
+            JOB_OPEN_INTEREST,
+            process_open_interest_job,
+            max(1, settings.futures_open_interest_interval_minutes),
+        ),
+        (JOB_NEWS, process_news_job, max(1, settings.news_collection_interval_minutes)),
+        (JOB_LISTINGS, process_listing_job, max(1, settings.news_collection_interval_minutes)),
+        (JOB_MOVEMENT, process_movement_job, max(1, settings.market_snapshot_interval_minutes)),
     ]
     for job_id, func, minutes in jobs:
         if scheduler.get_job(job_id) is None:
