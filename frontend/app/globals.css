@@ -1,3 +1,75 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Admin theme variables. The public home page keeps its dark styling;
+   these rules only change admin surfaces and the page background. */
+:root {
+  --panel-bg: #0f172a;
+  --panel-border: #1e293b;
+  --field-bg: #1e293b;
+  --field-border: #334155;
+  --fg: #f1f5f9;
+}
+
+[data-theme="light"] {
+  --panel-bg: #ffffff;
+  --panel-border: #e2e8f0;
+  --field-bg: #ffffff;
+  --field-border: #cbd5e1;
+  --fg: #0f172a;
+}
+
+[data-theme="light"] body {
+  background-color: #f1f5f9;
+  color: #0f172a;
+}
+
+.panel {
+  background-color: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 0.5rem;
+  padding: 1rem;
+}
+
+.field {
+  width: 100%;
+  background-color: var(--field-bg);
+  color: var(--fg);
+  border: 1px solid var(--field-border);
+  border-radius: 0.375rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+}
+
+.field:disabled {
+  opacity: 0.6;
+}
+
+.btn {
+  display: inline-block;
+  border: 1px solid var(--field-border);
+  background-color: var(--panel-bg);
+  color: var(--fg);
+  border-radius: 0.375rem;
+  padding: 0.45rem 0.9rem;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.btn-primary {
+  background-color: #0284c7;
+  border-color: #0284c7;
+  color: #ffffff;
+}
+
+.btn-danger {
+  background-color: #b91c1c;
+  border-color: #b91c1c;
+  color: #ffffff;
+}
