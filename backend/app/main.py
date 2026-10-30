@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.announcements import router as announcements_router
 from app.api.binance import router as binance_router
 from app.api.health import router as health_router
+from app.api.intelligence import router as intelligence_router
 from app.config import settings
 from app.logging_config import configure_logging
 from app.scheduler import shutdown_scheduler, start_scheduler
@@ -38,3 +39,4 @@ app.add_middleware(
 app.include_router(health_router)
 app.include_router(binance_router)
 app.include_router(announcements_router)
+app.include_router(intelligence_router)

@@ -53,6 +53,8 @@ class Settings(BaseSettings):
     # Comma-separated categories to notify about. Empty means
     # all categories. See docs/ANNOUNCEMENT_MONITOR.md.
     announcement_notification_categories: str = ""
+    # Phase 4 intelligence processing interval, in seconds.
+    intelligence_processing_interval_seconds: int = 600
 
     @model_validator(mode="after")
     def _validate_production_secret(self):

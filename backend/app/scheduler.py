@@ -22,25 +22,57 @@ def register_jobs() -> None:
 
     Phase 3 adds one job: announcement collection, every 5
     minutes, with max_instances=1 so runs never overlap.
-    Calling register_jobs twice does not register the job
-    twice: an existing job with the same id is left alone.
+    Phase 4 adds three processing jobs on the same
+    scheduler (no second scheduler is created): Alpha,
+    airdrop, and Prime Sale processing, each every 10
+    minutes by default. Calling register_jobs twice does
+    not register any job twice: an existing job with the
+    same id is left alone.
     """
     from app.announcements.scheduler_job import JOB_ID, collect_all_announcements
+    from app.config import settings
+    from app.intelligence.scheduler_jobs import (
+        JOB_AIRDROP,
+        JOB_ALPHA,
+        JOB_PRIME,
+        process_airdrop_job,
+        process_alpha_job,
+        process_prime_sale_job,
+    )
 
-    if scheduler.get_job(JOB_ID) is None:
-        scheduler.add_job(
-            collect_all_announcements,
-            "interval",
-            minutes=5,
-            id=JOB_ID,
-            max_instances=1,
-            coalesce=True,
-            misfire_grace_time=60,
-            replace_existing=False,
-        )
-        logger.info("Scheduled announcement collection job registered")
-    else:
-        logger.info("Announcement collection job already registered")
+    jobs = [
+        (JOB_ID, collect_all_announcements, 5),
+        (
+            JOB_ALPHA,
+            process_alpha_job,
+            max(1, settings.intelligence_processing_interval_seconds // 60),
+        ),
+        (
+            JOB_AIRDROP,
+            process_airdrop_job,
+            max(1, settings.intelligence_processing_interval_seconds // 60),
+        ),
+        (
+            JOB_PRIME,
+            process_prime_sale_job,
+            max(1, settings.intelligence_processing_interval_seconds // 60),
+        ),
+    ]
+    for job_id, func, minutes in jobs:
+        if scheduler.get_job(job_id) is None:
+            scheduler.add_job(
+                func,
+                "interval",
+                minutes=minutes,
+                id=job_id,
+                max_instances=1,
+                coalesce=True,
+                misfire_grace_time=60,
+                replace_existing=False,
+            )
+            logger.info("Scheduled job %s registered", job_id)
+        else:
+            logger.info("Job %s already registered", job_id)
 
 
 def start_scheduler() -> None:
