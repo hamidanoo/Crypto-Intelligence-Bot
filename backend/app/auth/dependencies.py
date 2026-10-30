@@ -16,6 +16,7 @@ from fastapi import Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from app.auth.audit import record_audit
+from app.auth.client_ip import resolve_client_ip
 from app.auth.permissions import user_permissions
 from app.auth.sessions import lookup_session
 from app.config import settings
@@ -30,7 +31,7 @@ def reset_login_rate_limits() -> None:
 
 def check_login_rate_limit(request: Request) -> None:
     """Per-IP login rate limit, independent of other limiters."""
-    client_ip = request.client.host if request.client else "unknown"
+    client_ip = resolve_client_ip(request, settings.trusted_proxy_networks) or "unknown"
     now = time.time()
     window = _login_attempts[client_ip]
     while window and window[0] <= now - 60:
@@ -41,7 +42,7 @@ def check_login_rate_limit(request: Request) -> None:
 
 
 def _client_info(request: Request) -> tuple[str | None, str | None]:
-    ip = request.client.host if request.client else None
+    ip = resolve_client_ip(request, settings.trusted_proxy_networks)
     user_agent = request.headers.get("user-agent")
     return ip, user_agent
 

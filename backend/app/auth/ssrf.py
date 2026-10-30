@@ -74,9 +74,18 @@ def fetch_feed(url: str) -> dict:
     Raises SSRFBlockedError for prohibited URLs and
     httpx.HTTPError for transport failures.
     """
+    # Validated once before any client is constructed, and
+    # re-validated immediately before every request: this
+    # narrows the DNS-rebinding window as far as httpx
+    # allows without a custom transport. It does not
+    # eliminate the window — a record could still change
+    # between this check and the connect — and that
+    # residual risk is documented in docs/SECURITY.md
+    # rather than claimed away.
     current = validate_url(url)
     with httpx.Client(timeout=TIMEOUT_SECONDS, follow_redirects=False) as client:
         for hop in range(MAX_REDIRECTS + 1):
+            current = validate_url(current)
             with client.stream(
                 "GET",
                 current,

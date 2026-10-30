@@ -127,6 +127,39 @@ class Settings(BaseSettings):
     credential_encryption_key_id: str = "v1"
     credential_encryption_key_previous_id: str | None = None
     dashboard_refresh_interval_seconds: int = 60
+    # Phase 10 trusted proxies: comma-separated IPs or CIDR
+    # ranges (for example "203.0.113.10, 203.0.113.0/28").
+    # Empty (the default) means NO forwarded header is ever
+    # trusted: rate limits and audit IPs use the direct
+    # remote address. Only set this to the addresses of
+    # reverse proxies you operate (Nginx on the same host
+    # or VPC); never set it to a public range, or any
+    # client could spoof its IP and evade rate limits.
+    trusted_proxies: str = ""
+
+    @property
+    def trusted_proxy_networks(self) -> list:
+        import ipaddress
+
+        networks = []
+        for part in self.trusted_proxies.split(","):
+            part = part.strip()
+            if not part:
+                continue
+            try:
+                if "/" in part:
+                    networks.append(ipaddress.ip_network(part, strict=False))
+                else:
+                    networks.append(
+                        ipaddress.ip_network(f"{part}/32" if ":" not in part else f"{part}/128")
+                    )
+            except ValueError:
+                # A malformed entry is ignored rather than
+                # silently trusting everything; the operator
+                # is expected to fix the value, and the
+                # production-check script flags it.
+                continue
+        return networks
 
     @model_validator(mode="after")
     def _validate_production_secret(self):

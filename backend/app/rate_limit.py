@@ -11,13 +11,16 @@ from collections import defaultdict, deque
 
 from fastapi import HTTPException, Request
 
+from app.auth.client_ip import resolve_client_ip
+from app.config import settings
+
 MAX_REQUESTS_PER_MINUTE = 120
 _window_seconds = 60
 _requests: dict[str, deque] = defaultdict(deque)
 
 
 def check_rate_limit(request: Request, *, limit: int = MAX_REQUESTS_PER_MINUTE) -> None:
-    client_ip = request.client.host if request.client else "unknown"
+    client_ip = resolve_client_ip(request, settings.trusted_proxy_networks) or "unknown"
     now = time.time()
     window = _requests[client_ip]
     while window and window[0] <= now - _window_seconds:

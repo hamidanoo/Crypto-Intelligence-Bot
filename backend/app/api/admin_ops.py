@@ -23,7 +23,7 @@ from app.auth.encryption import (
     mask_secret,
     require_encryption_key,
 )
-from app.auth.ssrf import SSRFBlockedError, fetch_feed
+from app.auth.ssrf import SSRFBlockedError, fetch_feed, validate_url
 from app.config import settings
 from app.database import get_db
 from app.models import (
@@ -301,6 +301,21 @@ async def test_integration(
             row.last_error = "Decryption failed"
             db.commit()
             raise HTTPException(status_code=502, detail=str(exc)) from exc
+    # Phase 10: a stored integration base URL is fetched by
+    # the test below (Binance spot ping), so it must pass
+    # the same SSRF validation as an RSS feed URL before
+    # any connection is attempted. Literal private,
+    # loopback, and link-local addresses are blocked
+    # without connecting; a hostname that resolves to a
+    # prohibited address is blocked the same way.
+    if row.base_url:
+        try:
+            validate_url(row.base_url)
+        except SSRFBlockedError:
+            row.last_error = "SSRF validation failed for integration URL"
+            db.commit()
+            audit(db, user, "integration.test_blocked", entity="api_integration", entity_id=row.id)
+            return {"status": "blocked", "detail": "Integration URL failed SSRF validation"}
     if "binance" in row.provider.lower():
         try:
             from app.binance.client import BinanceClient
